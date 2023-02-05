@@ -46,7 +46,7 @@ func (p *plot) Move(name string) (file os.FileInfo, written int64, duration time
 		return nil, 0, 0, err
 	}
 
-	dst, err := os.Create(name)
+	dst, err := os.Create(name + ".tmp")
 	if err != nil {
 		src.Close()
 		dst.Close()
@@ -54,13 +54,22 @@ func (p *plot) Move(name string) (file os.FileInfo, written int64, duration time
 	}
 
 	start := time.Now()
+
 	written, err = io.Copy(dst, src)
-	duration = time.Since(start)
 	if err != nil {
 		src.Close()
 		dst.Close()
 		return nil, 0, 0, err
 	}
+
+	err = os.Rename(name+".tmp", name)
+	if err != nil {
+		src.Close()
+		dst.Close()
+		return nil, 0, 0, err
+	}
+
+	duration = time.Since(start)
 
 	file, err = dst.Stat()
 	if err != nil {
