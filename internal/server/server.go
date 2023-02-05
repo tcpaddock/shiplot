@@ -98,7 +98,10 @@ func (srv *Server) Start() (err error) {
 
 			dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
 
-			srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
+			// Increment path
+			srv.incrementDestinationPath(filepath.Dir(dest))
+
+			srv.dispatcher.Dispatch(&moveJob{srv: srv, plot: p, dest: dest})
 		}
 	}
 
@@ -147,7 +150,10 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 
 				dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
 
-				srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
+				// Increment path
+				srv.incrementDestinationPath(filepath.Dir(dest))
+
+				srv.dispatcher.Dispatch(&moveJob{srv: srv, plot: p, dest: dest})
 			}
 		}
 	}
@@ -180,7 +186,32 @@ func (srv *Server) findDestinationPath() (path string) {
 	return path
 }
 
+func (srv *Server) incrementDestinationPath(name string) {
+	srv.dpMutex.Lock()
+
+	_, i, _ := lo.FindIndexOf(srv.destPaths, func(item destPath) bool {
+		return item.name == name
+	})
+
+	srv.destPaths[i].count++
+
+	srv.dpMutex.Unlock()
+}
+
+func (srv *Server) decrementDestinationPath(name string) {
+	srv.dpMutex.Lock()
+
+	_, i, _ := lo.FindIndexOf(srv.destPaths, func(item destPath) bool {
+		return item.name == name
+	})
+
+	srv.destPaths[i].count--
+
+	srv.dpMutex.Unlock()
+}
+
 type moveJob struct {
+	srv  *Server
 	plot *plot
 	dest string
 }
@@ -192,6 +223,9 @@ func (job *moveJob) Do() {
 	if err != nil {
 		slog.Default().Error(fmt.Sprintf("Failed to move %s to %s", job.plot.Name, job.dest), err)
 	}
+
+	// Decrement path counter
+	job.srv.decrementDestinationPath(filepath.Dir(job.dest))
 
 	slog.Default().Info(fmt.Sprintf("Moved %s to %s", job.plot.Name, job.dest), slog.Int64("written", written), slog.Duration("time", duration))
 }
