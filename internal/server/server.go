@@ -35,6 +35,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"golang.org/x/exp/slog"
 )
 
 type destPath struct {
@@ -45,21 +46,25 @@ type destPath struct {
 
 type Server struct {
 	cfg        config.Config
+	logger     slog.Logger
 	wg         sync.WaitGroup
 	dispatcher dispatcher.Dispatcher
 	destPaths  []destPath
 	dpMutex    sync.Mutex
 }
 
-func NewServer(cfg config.Config) (s *Server) {
+func NewServer(cfg config.Config, logger slog.Logger) (s *Server) {
 	s = new(Server)
 
 	s.cfg = cfg
+	s.logger = logger
 
 	return s
 }
 
 func (srv *Server) Start() (err error) {
+	srv.logger.Info("Starting server...")
+
 	// Populate available paths
 	srv.dpMutex.Lock()
 	for _, path := range srv.cfg.DestinationPaths {
@@ -144,7 +149,7 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 
 				dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
 
-				srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
+				srv.dispatcher.Dispatch(&moveJob{logger: srv.logger, plot: p, dest: dest})
 			}
 		}
 	}
@@ -178,15 +183,18 @@ func (srv *Server) findDestinationPath() (path string) {
 }
 
 type moveJob struct {
-	plot *plot
-	dest string
+	logger slog.Logger
+	plot   *plot
+	dest   string
 }
 
 func (job *moveJob) Do() {
+	job.logger.Info(fmt.Sprintf("Moving %s to %s", job.plot.Name, job.dest))
+
 	_, written, duration, err := job.plot.Move(job.dest)
 	if err != nil {
-		fmt.Printf("ERROR: Failed to move %s to %s, %s\n", job.plot.Name, job.dest, err)
+		job.logger.Error(fmt.Sprintf("Failed to move %s to %s", job.plot.Name, job.dest), err)
 	}
 
-	fmt.Printf("Moved %s to %s, wrote %d bytes in %s\n", job.plot.Name, job.dest, written, duration)
+	job.logger.Info(fmt.Sprintf("Moved %s to %s", job.plot.Name, job.dest), slog.Int64("written", written), slog.Duration("time", duration))
 }

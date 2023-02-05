@@ -22,16 +22,19 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"golang.org/x/exp/slog"
 )
 
-var cfgFile string
-var cfg config.Config
+var (
+	cfgFile string
+	cfg     config.Config
+	logger  *slog.Logger
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -50,7 +53,7 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(initLogger, initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.shiplot.yaml or ./.shiplot.yaml)")
 }
@@ -80,9 +83,14 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stdout, "Using config file:", viper.ConfigFileUsed())
-
+		logger.Info("Using config file:" + viper.ConfigFileUsed())
 		err := viper.Unmarshal(&cfg)
 		cobra.CheckErr(err)
 	}
+}
+
+// setup global logger
+func initLogger() {
+	textHandler := slog.NewTextHandler(os.Stdout)
+	logger = slog.New(textHandler)
 }
