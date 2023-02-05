@@ -35,6 +35,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"golang.org/x/exp/slog"
 )
 
 type destPath struct {
@@ -60,6 +61,8 @@ func NewServer(cfg config.Config) (s *Server) {
 }
 
 func (srv *Server) Start() (err error) {
+	slog.Default().Info("Starting server...")
+
 	// Populate available paths
 	srv.dpMutex.Lock()
 	for _, path := range srv.cfg.DestinationPaths {
@@ -183,10 +186,12 @@ type moveJob struct {
 }
 
 func (job *moveJob) Do() {
+	slog.Default().Info(fmt.Sprintf("Moving %s to %s", job.plot.Name, job.dest))
+
 	_, written, duration, err := job.plot.Move(job.dest)
 	if err != nil {
-		fmt.Printf("ERROR: Failed to move %s to %s, %s\n", job.plot.Name, job.dest, err)
+		slog.Default().Error(fmt.Sprintf("Failed to move %s to %s", job.plot.Name, job.dest), err)
 	}
 
-	fmt.Printf("Moved %s to %s, wrote %d bytes in %s\n", job.plot.Name, job.dest, written, duration)
+	slog.Default().Info(fmt.Sprintf("Moved %s to %s", job.plot.Name, job.dest), slog.Int64("written", written), slog.Duration("time", duration))
 }

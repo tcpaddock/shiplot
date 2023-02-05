@@ -22,16 +22,18 @@ THE SOFTWARE.
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"golang.org/x/exp/slog"
 )
 
-var cfgFile string
-var cfg config.Config
+var (
+	cfgFile string
+	cfg     config.Config
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -80,8 +82,7 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Fprintln(os.Stdout, "Using config file:", viper.ConfigFileUsed())
-
+		slog.Default().Info("Using config file:" + viper.ConfigFileUsed())
 		err := viper.Unmarshal(&cfg)
 		cobra.CheckErr(err)
 	}
