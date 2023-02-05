@@ -1,5 +1,4 @@
-The MIT License (MIT)
-
+/*
 Copyright © 2023 Taylor Paddock <tcpaddock@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,3 +18,32 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+*/
+package cmd
+
+import (
+	"github.com/spf13/cobra"
+	"github.com/tcpaddock/shiplot/internal/server"
+)
+
+// runCmd represents the run command
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Starts server",
+	Long:  `Starts server`,
+	Run: func(cmd *cobra.Command, args []string) {
+		s := server.NewServer(cfg)
+
+		err := s.Start()
+		cobra.CheckErr(err)
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(runCmd)
+
+	runCmd.PersistentFlags().IntVar(&cfg.Threads, "threads", 4, "Number of concurrent file transfers (default is 4)")
+	runCmd.PersistentFlags().IntVar(&cfg.Port, "port", 9080, "Server listen port (default is 9080)")
+	runCmd.PersistentFlags().StringVar(&cfg.StagingPath, "stagingPath", "", "Directory on fast storage used to stage plots")
+	runCmd.PersistentFlags().StringArrayVar(&cfg.DestinationPaths, "destinationPaths", nil, "Directories for final plot storage")
+}

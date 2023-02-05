@@ -1,0 +1,5 @@
+threads: 5
+stagingPath: "/Users/taylor/test/stage"
+destinationPaths:
+  - "/Users/taylor/test/dest1"
+  - "/Users/taylor/test/dest2"
