@@ -23,6 +23,7 @@ package server
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -82,6 +83,22 @@ func (srv *Server) Start() (err error) {
 		srv.runWatcher()
 	}()
 
+	// Copy existing plots
+	files, err := os.ReadDir(srv.cfg.StagingPath)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".plot") {
+			p := NewPlot(filepath.Join(srv.cfg.StagingPath, file.Name()))
+
+			dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
+
+			srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
+		}
+	}
+
 	// Wait for everything to close
 	srv.wg.Wait()
 
@@ -125,8 +142,7 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
 				p := NewPlot(e.Name)
 
-				// dest := filepath.Join(w.destDirs[0], filepath.Base(e.Name))
-				dest := filepath.Join(srv.findDestinationPath(), filepath.Base(e.Name))
+				dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
 
 				srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
 			}
