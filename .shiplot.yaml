@@ -1,5 +1,5 @@
-threads: 5
-stagingPath: "/Users/taylor/test/stage"
+threads: 1
+stagingPath: "C:\\temp\\stage"
 destinationPaths:
-  - "/Users/taylor/test/dest1"
-  - "/Users/taylor/test/dest2"
+  - "C:\\temp\\dest1"
+  - "C:\\temp\\dest2"

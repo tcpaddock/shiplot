@@ -31,6 +31,7 @@ import (
 	"github.com/YSZhuoyang/go-dispatcher/dispatcher"
 	"github.com/fsnotify/fsnotify"
 	"github.com/ricochet2200/go-disk-usage/du"
+	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/tcpaddock/shiplot/internal/config"
 )
@@ -115,7 +116,7 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 				return
 			}
 			fmt.Printf("ERROR: %s\n", err)
-		// Read from Events.
+		// Read from Events
 		case e, ok := <-fw.Events:
 			if !ok { // Channel was closed (i.e. Watcher.Close() was called)
 				return
@@ -136,10 +137,24 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 func (srv *Server) findDestinationPath() (path string) {
 	srv.dpMutex.Lock()
 
-	// Sort by number of transfers
-	sort.Slice(srv.destPaths, func(i, j int) bool {
-		return srv.destPaths[i].count < srv.destPaths[j].count && srv.destPaths[i].usage.Free() < srv.destPaths[j].usage.Free()
+	// Find all paths that have no transfers
+	var available []destPath
+	for {
+		available = lo.Filter(srv.destPaths, func(path destPath, index int) bool {
+			return path.count == 0
+		})
+
+		if len(available) > 0 {
+			break
+		}
+	}
+
+	// Sort paths by free space
+	sort.Slice(available, func(i, j int) bool {
+		return available[i].usage.Free() < available[j].usage.Free()
 	})
+
+	path = available[0].name
 
 	srv.dpMutex.Unlock()
 
