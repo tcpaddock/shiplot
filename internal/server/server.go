@@ -46,24 +46,22 @@ type destPath struct {
 
 type Server struct {
 	cfg        config.Config
-	logger     slog.Logger
 	wg         sync.WaitGroup
 	dispatcher dispatcher.Dispatcher
 	destPaths  []destPath
 	dpMutex    sync.Mutex
 }
 
-func NewServer(cfg config.Config, logger slog.Logger) (s *Server) {
+func NewServer(cfg config.Config) (s *Server) {
 	s = new(Server)
 
 	s.cfg = cfg
-	s.logger = logger
 
 	return s
 }
 
 func (srv *Server) Start() (err error) {
-	srv.logger.Info("Starting server...")
+	slog.Default().Info("Starting server...")
 
 	// Populate available paths
 	srv.dpMutex.Lock()
@@ -149,7 +147,7 @@ func (srv *Server) watchLoop(fw *fsnotify.Watcher) {
 
 				dest := filepath.Join(srv.findDestinationPath(), filepath.Base(p.Name))
 
-				srv.dispatcher.Dispatch(&moveJob{logger: srv.logger, plot: p, dest: dest})
+				srv.dispatcher.Dispatch(&moveJob{plot: p, dest: dest})
 			}
 		}
 	}
@@ -183,18 +181,17 @@ func (srv *Server) findDestinationPath() (path string) {
 }
 
 type moveJob struct {
-	logger slog.Logger
-	plot   *plot
-	dest   string
+	plot *plot
+	dest string
 }
 
 func (job *moveJob) Do() {
-	job.logger.Info(fmt.Sprintf("Moving %s to %s", job.plot.Name, job.dest))
+	slog.Default().Info(fmt.Sprintf("Moving %s to %s", job.plot.Name, job.dest))
 
 	_, written, duration, err := job.plot.Move(job.dest)
 	if err != nil {
-		job.logger.Error(fmt.Sprintf("Failed to move %s to %s", job.plot.Name, job.dest), err)
+		slog.Default().Error(fmt.Sprintf("Failed to move %s to %s", job.plot.Name, job.dest), err)
 	}
 
-	job.logger.Info(fmt.Sprintf("Moved %s to %s", job.plot.Name, job.dest), slog.Int64("written", written), slog.Duration("time", duration))
+	slog.Default().Info(fmt.Sprintf("Moved %s to %s", job.plot.Name, job.dest), slog.Int64("written", written), slog.Duration("time", duration))
 }

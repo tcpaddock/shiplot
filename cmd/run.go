@@ -32,7 +32,7 @@ var runCmd = &cobra.Command{
 	Short: "Starts server",
 	Long:  `Starts server`,
 	Run: func(cmd *cobra.Command, args []string) {
-		s := server.NewServer(cfg, *logger)
+		s := server.NewServer(cfg)
 
 		err := s.Start()
 		cobra.CheckErr(err)

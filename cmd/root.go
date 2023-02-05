@@ -33,7 +33,6 @@ import (
 var (
 	cfgFile string
 	cfg     config.Config
-	logger  *slog.Logger
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -53,7 +52,7 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initLogger, initConfig)
+	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.shiplot.yaml or ./.shiplot.yaml)")
 }
@@ -83,14 +82,8 @@ func initConfig() {
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		logger.Info("Using config file:" + viper.ConfigFileUsed())
+		slog.Default().Info("Using config file:" + viper.ConfigFileUsed())
 		err := viper.Unmarshal(&cfg)
 		cobra.CheckErr(err)
 	}
-}
-
-// setup global logger
-func initLogger() {
-	textHandler := slog.NewTextHandler(os.Stdout)
-	logger = slog.New(textHandler)
 }
