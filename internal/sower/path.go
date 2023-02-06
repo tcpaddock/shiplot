@@ -38,29 +38,29 @@ type pathList []*path
 
 var pathListMutex sync.Mutex
 
-func (pl pathList) Len() int { return len(pl) }
+func (pl *pathList) Len() int { return len(*pl) }
 
-func (pl pathList) Swap(i, j int) { pl[i], pl[j] = pl[j], pl[i] }
+func (pl *pathList) Swap(i, j int) { (*pl)[i], (*pl)[j] = (*pl)[j], (*pl)[i] }
 
-func (pl pathList) Less(i, j int) bool { return pl[i].usage.Free() < pl[j].usage.Free() }
+func (pl *pathList) Less(i, j int) bool { return (*pl)[i].usage.Free() < (*pl)[j].usage.Free() }
 
-func (pl pathList) Populate(paths []string) {
+func (pl *pathList) Populate(paths []string) {
 	pathListMutex.Lock()
 
 	for _, p := range paths {
 		usage := du.NewDiskUsage(p)
-		pl = append(pl, &path{name: p, usage: *usage, available: true})
+		*pl = append(*pl, &path{name: p, usage: *usage, available: true})
 	}
 
 	pathListMutex.Unlock()
 }
 
-func (pl pathList) FirstAvailable() (index int, path *path) {
+func (pl *pathList) FirstAvailable() (index int, path *path) {
 	pathListMutex.Lock()
 
 	sort.Sort(pl)
 
-	for i, p := range pl {
+	for i, p := range *pl {
 		if p.available {
 			index = i
 			path = p
@@ -74,10 +74,10 @@ func (pl pathList) FirstAvailable() (index int, path *path) {
 	return
 }
 
-func (pl pathList) Update(index int, available bool) {
+func (pl *pathList) Update(index int, available bool) {
 	pathListMutex.Lock()
 
-	p := pl[index]
+	p := (*pl)[index]
 	p.available = available
 	p.usage = *du.NewDiskUsage(p.name)
 	sort.Sort(pl)
@@ -85,7 +85,7 @@ func (pl pathList) Update(index int, available bool) {
 	pathListMutex.Unlock()
 }
 
-func (pl pathList) Remove(index int) (list *pathList) {
-	l := append(pl[:index], pl[index+1])
+func (pl *pathList) Remove(index int) (list *pathList) {
+	l := append((*pl)[:index], (*pl)[index+1])
 	return &l
 }
