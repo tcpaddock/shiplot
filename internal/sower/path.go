@@ -55,16 +55,6 @@ func (pl pathList) Populate(paths []string) {
 	pathListMutex.Unlock()
 }
 
-func (pl pathList) AvailableCount() (count int) {
-	for _, p := range pl {
-		if p.available {
-			count++
-		}
-	}
-
-	return
-}
-
 func (pl pathList) FirstAvailable() (index int, path *path) {
 	pathListMutex.Lock()
 

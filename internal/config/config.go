@@ -22,10 +22,10 @@ THE SOFTWARE.
 package config
 
 type Config struct {
-	Threads          int
+	MaxThreads       uint
 	StagingPath      string
 	DestinationPaths []string
-	Port             int
+	Port             uint
 }
 
 func NewConfig() *Config {

@@ -43,6 +43,7 @@ type Sower struct {
 	cfg      config.Config
 	paths    *pathList
 	movePool *ants.PoolWithFunc
+	poolSize int
 	watcher  *fsnotify.Watcher
 	wg       sync.WaitGroup
 }
@@ -58,7 +59,12 @@ func NewSower(ctx context.Context, cfg config.Config) (t *Sower, err error) {
 	t.paths.Populate(t.cfg.DestinationPaths)
 
 	// Create worker pool for moving plots
-	t.movePool, err = ants.NewPoolWithFunc(t.paths.AvailableCount(), func(i interface{}) {
+	if t.cfg.MaxThreads == 0 {
+		t.poolSize = t.paths.Len()
+	} else {
+		t.poolSize = int(t.cfg.MaxThreads)
+	}
+	t.movePool, err = ants.NewPoolWithFunc(t.paths.Len(), func(i interface{}) {
 		t.movePlot(i)
 		t.wg.Done()
 	})
@@ -169,6 +175,9 @@ func (s *Sower) movePlot(i interface{}) {
 		} else {
 			// Remove path if space too too low
 			s.paths = s.paths.Remove(index)
+
+			// Adjust move pool
+			s.movePool.Tune(s.paths.Len())
 			continue
 		}
 	}
