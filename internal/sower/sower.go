@@ -127,23 +127,58 @@ func (s *Sower) runLoop() {
 
 func (s *Sower) movePlot(i interface{}) {
 	var (
-		srcFullName    = i.(string)
-		srcName        = filepath.Base(srcFullName)
-		index, dstPath = s.paths.FirstAvailable()
-		dstDir         = dstPath.name
-		dstFullName    = filepath.Join(dstDir, srcName)
+		srcFullName = i.(string)
+		srcName     = filepath.Base(srcFullName)
 	)
-
-	slog.Default().Info(fmt.Sprintf("Moving %s to %s", srcName, dstDir))
 
 	// Open source file
 	src, err := os.Open(srcFullName)
 	if err != nil {
 		src.Close()
-		s.paths.Update(index, true)
 		slog.Default().Error(fmt.Sprintf("Failed to open %s", srcFullName), err)
 		return
 	}
+
+	// Get source file size
+	srcInfo, err := src.Stat()
+	if err != nil {
+		src.Close()
+		slog.Default().Error(fmt.Sprintf("Failed to get the file size of %s", srcFullName), err)
+		return
+	}
+
+	// Find the best destination path
+	var (
+		index   int
+		dstPath *path
+	)
+
+	for {
+		// Gets the lowest sized first path and marks it unavailable
+		index, dstPath = s.paths.FirstAvailable()
+
+		// Wait for 30 seconds if no available destination
+		if dstPath == nil {
+			time.Sleep(time.Second * 30)
+			continue
+		}
+
+		// Ensure destination path has enough space
+		if uint64(srcInfo.Size()) < dstPath.usage.Free() {
+			break
+		} else {
+			// Remove path if space too too low
+			s.paths = s.paths.Remove(index)
+			continue
+		}
+	}
+
+	var (
+		dstDir      = dstPath.name
+		dstFullName = filepath.Join(dstDir, srcName)
+	)
+
+	slog.Default().Info(fmt.Sprintf("Moving %s to %s", srcName, dstDir))
 
 	// Open destination file
 	dst, err := os.Create(dstFullName + ".tmp")

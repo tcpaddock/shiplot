@@ -94,3 +94,8 @@ func (pl pathList) Update(index int, available bool) {
 
 	pathListMutex.Unlock()
 }
+
+func (pl pathList) Remove(index int) (list *pathList) {
+	l := append(pl[:index], pl[index+1])
+	return &l
+}
