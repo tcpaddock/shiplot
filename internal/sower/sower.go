@@ -90,6 +90,19 @@ func (s *Sower) Run() (err error) {
 		return err
 	}
 
+	// Move existing plots
+	files, err := os.ReadDir(s.cfg.StagingPath)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), ".plot") {
+			s.wg.Add(1)
+			s.movePool.Invoke(filepath.Join(s.cfg.StagingPath, file.Name()))
+		}
+	}
+
 	return nil
 }
 

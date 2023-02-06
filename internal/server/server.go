@@ -50,12 +50,18 @@ func NewServer(ctx context.Context, cfg config.Config) (s *Server, err error) {
 }
 
 func (s *Server) Start() (err error) {
-	slog.Default().Info("Starting server...")
+	slog.Default().Info("Starting server")
 
 	err = s.sower.Run()
 	if err != nil {
 		return err
 	}
 
-	return nil
+	for {
+		select {
+		case <-make(chan struct{}):
+		case <-s.ctx.Done():
+			return nil
+		}
+	}
 }
