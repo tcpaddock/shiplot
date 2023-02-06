@@ -43,36 +43,32 @@ type Sower struct {
 	cfg      config.Config
 	paths    *pathList
 	movePool *ants.PoolWithFunc
-	poolSize int
 	watcher  *fsnotify.Watcher
 	wg       sync.WaitGroup
 }
 
-func NewSower(ctx context.Context, cfg config.Config) (t *Sower, err error) {
-	t = new(Sower)
+func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
+	s = new(Sower)
 
-	t.ctx, t.cancel = context.WithCancel(ctx)
-	t.cfg = cfg
+	s.ctx, s.cancel = context.WithCancel(ctx)
+	s.cfg = cfg
 
 	// Fill list of available destination paths
-	t.paths = new(pathList)
-	t.paths.Populate(t.cfg.DestinationPaths)
+	s.paths = new(pathList)
+	s.paths.Populate(s.cfg.DestinationPaths)
 
 	// Create worker pool for moving plots
-	if t.cfg.MaxThreads == 0 {
-		t.poolSize = t.paths.Len()
-	} else {
-		t.poolSize = int(t.cfg.MaxThreads)
-	}
-	t.movePool, err = ants.NewPoolWithFunc(t.paths.Len(), func(i interface{}) {
-		t.movePlot(i)
-		t.wg.Done()
+	s.movePool, err = ants.NewPoolWithFunc(4, func(i interface{}) {
+		s.movePlot(i)
+		s.wg.Done()
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return t, nil
+	s.tunePool()
+
+	return s, nil
 }
 
 func (s *Sower) Run() (err error) {
@@ -177,7 +173,7 @@ func (s *Sower) movePlot(i interface{}) {
 			s.paths = s.paths.Remove(index)
 
 			// Adjust move pool
-			s.movePool.Tune(s.paths.Len())
+			s.tunePool()
 			continue
 		}
 	}
@@ -243,4 +239,22 @@ func (s *Sower) movePlot(i interface{}) {
 	s.paths.Update(index, true)
 
 	slog.Default().Info(fmt.Sprintf("Moved %s to %s", srcName, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+}
+
+func (s *Sower) tunePool() {
+	poolSize := int(s.cfg.MaxThreads)
+
+	if poolSize == 0 {
+		poolSize = s.paths.Len()
+	} else {
+		if s.paths.Len() < poolSize {
+			poolSize = s.paths.Len()
+		}
+	}
+
+	if poolSize == 0 {
+		poolSize = 1
+	}
+
+	s.movePool.Tune(poolSize)
 }
