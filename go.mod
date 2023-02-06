@@ -3,10 +3,9 @@ module github.com/tcpaddock/shiplot
 go 1.19
 
 require (
-	github.com/YSZhuoyang/go-dispatcher/dispatcher v1.1.1
 	github.com/fsnotify/fsnotify v1.6.0
+	github.com/panjf2000/ants/v2 v2.7.1
 	github.com/ricochet2200/go-disk-usage/du v0.0.0-20210707232629-ac9918953285
-	github.com/samber/lo v1.37.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/viper v1.15.0
 	golang.org/x/exp v0.0.0-20230203172020-98cc5a0785f9

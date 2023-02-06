@@ -22,6 +22,8 @@ THE SOFTWARE.
 package cmd
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/tcpaddock/shiplot/internal/server"
 )
@@ -32,9 +34,11 @@ var runCmd = &cobra.Command{
 	Short: "Starts server",
 	Long:  `Starts server`,
 	Run: func(cmd *cobra.Command, args []string) {
-		s := server.NewServer(cfg)
+		ctx := context.Background()
+		s, err := server.NewServer(ctx, cfg)
+		cobra.CheckErr(err)
 
-		err := s.Start()
+		err = s.Start()
 		cobra.CheckErr(err)
 	},
 }
@@ -42,8 +46,8 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.PersistentFlags().IntVar(&cfg.Threads, "threads", 4, "Number of concurrent file transfers (default is 4)")
-	runCmd.PersistentFlags().IntVar(&cfg.Port, "port", 9080, "Server listen port (default is 9080)")
+	runCmd.PersistentFlags().UintVar(&cfg.MaxThreads, "maxThreads", 4, "Number of concurrent file transfers (default is 4)")
+	runCmd.PersistentFlags().UintVar(&cfg.Port, "port", 9080, "Server listen port (default is 9080)")
 	runCmd.PersistentFlags().StringVar(&cfg.StagingPath, "stagingPath", "", "Directory on fast storage used to stage plots")
 	runCmd.PersistentFlags().StringArrayVar(&cfg.DestinationPaths, "destinationPaths", nil, "Directories for final plot storage")
 }
