@@ -184,8 +184,10 @@ func (s *Sower) movePlot(i interface{}) {
 
 			// Adjust move pool
 			size := s.getPoolSize()
-			slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
-			s.movePool.Tune(size)
+			if s.movePool.Cap() != size {
+				slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
+				s.movePool.Tune(size)
+			}
 			continue
 		}
 	}
