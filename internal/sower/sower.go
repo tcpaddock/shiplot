@@ -229,6 +229,8 @@ func (s *Sower) movePlot(i interface{}) {
 		return
 	}
 
+	duration := time.Since(start)
+
 	// Close source file
 	err = src.Close()
 	if err != nil {
@@ -245,7 +247,12 @@ func (s *Sower) movePlot(i interface{}) {
 		return
 	}
 
-	duration := time.Since(start)
+	// Move succeeded, delete source
+	err = os.Remove(src.Name())
+	if err != nil {
+		slog.Default().Error(fmt.Sprintf("Failed to delete %s", src.Name()), err)
+		return
+	}
 
 	// Update available paths
 	s.paths.Update(dstPath, true)
