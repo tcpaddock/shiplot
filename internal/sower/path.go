@@ -26,11 +26,12 @@ import (
 	"sync"
 
 	"github.com/ricochet2200/go-disk-usage/du"
+	"golang.org/x/exp/slices"
 )
 
 type path struct {
 	name      string
-	usage     du.DiskUsage
+	usage     *du.DiskUsage
 	available bool
 }
 
@@ -49,20 +50,19 @@ func (pl *pathList) Populate(paths []string) {
 
 	for _, p := range paths {
 		usage := du.NewDiskUsage(p)
-		*pl = append(*pl, &path{name: p, usage: *usage, available: true})
+		*pl = append(*pl, &path{name: p, usage: usage, available: true})
 	}
 
 	pathListMutex.Unlock()
 }
 
-func (pl *pathList) FirstAvailable() (index int, path *path) {
+func (pl *pathList) FirstAvailable() (path *path) {
 	pathListMutex.Lock()
 
 	sort.Sort(pl)
 
-	for i, p := range *pl {
+	for _, p := range *pl {
 		if p.available {
-			index = i
 			path = p
 			p.available = false
 			break
@@ -74,18 +74,33 @@ func (pl *pathList) FirstAvailable() (index int, path *path) {
 	return
 }
 
-func (pl *pathList) Update(index int, available bool) {
+func (pl *pathList) Update(path *path, available bool) {
 	pathListMutex.Lock()
+
+	index := slices.Index(*pl, path)
 
 	p := (*pl)[index]
 	p.available = available
-	p.usage = *du.NewDiskUsage(p.name)
+	p.usage = du.NewDiskUsage(p.name)
 	sort.Sort(pl)
 
 	pathListMutex.Unlock()
 }
 
-func (pl *pathList) Remove(index int) (list *pathList) {
-	l := append((*pl)[:index], (*pl)[index+1])
-	return &l
+func (pl *pathList) Remove(path *path) {
+	pathListMutex.Lock()
+
+	var newList pathList
+
+	copy(newList, *pl)
+
+	index := slices.Index(newList, path)
+
+	if index >= 0 {
+		newList = append(newList[:index], newList[index+1:]...)
+	}
+
+	pl = &newList
+
+	pathListMutex.Unlock()
 }

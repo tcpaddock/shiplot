@@ -58,15 +58,15 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s.paths.Populate(s.cfg.DestinationPaths)
 
 	// Create worker pool for moving plots
-	s.movePool, err = ants.NewPoolWithFunc(4, func(i interface{}) {
+	size := s.getPoolSize()
+	slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
+	s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
 		s.movePlot(i)
 		s.wg.Done()
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	s.tunePool()
 
 	return s, nil
 }
@@ -163,18 +163,15 @@ func (s *Sower) movePlot(i interface{}) {
 	}
 
 	// Find the best destination path
-	var (
-		index   int
-		dstPath *path
-	)
+	var dstPath *path
 
 	for {
 		// Gets the lowest sized first path and marks it unavailable
-		index, dstPath = s.paths.FirstAvailable()
+		dstPath = s.paths.FirstAvailable()
 
-		// Wait for 30 seconds if no available destination
+		// Wait for 10 seconds if no available destination
 		if dstPath == nil {
-			time.Sleep(time.Second * 30)
+			time.Sleep(time.Second * 10)
 			continue
 		}
 
@@ -182,11 +179,13 @@ func (s *Sower) movePlot(i interface{}) {
 		if uint64(srcInfo.Size()) < dstPath.usage.Free() {
 			break
 		} else {
-			// Remove path if space too too low
-			s.paths = s.paths.Remove(index)
+			// Remove path if space is too low
+			s.paths.Remove(dstPath)
 
 			// Adjust move pool
-			s.tunePool()
+			size := s.getPoolSize()
+			slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
+			s.movePool.Tune(size)
 			continue
 		}
 	}
@@ -203,7 +202,7 @@ func (s *Sower) movePlot(i interface{}) {
 	if err != nil {
 		src.Close()
 		dst.Close()
-		s.paths.Update(index, true)
+		s.paths.Update(dstPath, true)
 		slog.Default().Error(fmt.Sprintf("Failed to create temp file %s", dstFullName+".tmp"), err)
 		return
 	}
@@ -215,7 +214,7 @@ func (s *Sower) movePlot(i interface{}) {
 	if err != nil {
 		src.Close()
 		dst.Close()
-		s.paths.Update(index, true)
+		s.paths.Update(dstPath, true)
 		slog.Default().Error(fmt.Sprintf("Failed to copy %s to %s", srcFullName, dstFullName+".tmp"), err)
 		return
 	}
@@ -225,7 +224,7 @@ func (s *Sower) movePlot(i interface{}) {
 	if err != nil {
 		src.Close()
 		dst.Close()
-		s.paths.Update(index, true)
+		s.paths.Update(dstPath, true)
 		slog.Default().Error(fmt.Sprintf("Failed to rename %s to %s", dstFullName+".tmp", dstFullName), err)
 		return
 	}
@@ -233,7 +232,7 @@ func (s *Sower) movePlot(i interface{}) {
 	// Close source file
 	err = src.Close()
 	if err != nil {
-		s.paths.Update(index, true)
+		s.paths.Update(dstPath, true)
 		slog.Default().Error(fmt.Sprintf("Failed to close %s", srcFullName), err)
 		return
 	}
@@ -241,7 +240,7 @@ func (s *Sower) movePlot(i interface{}) {
 	// Close destination file
 	err = dst.Close()
 	if err != nil {
-		s.paths.Update(index, true)
+		s.paths.Update(dstPath, true)
 		slog.Default().Error(fmt.Sprintf("Failed to close %s", dstFullName), err)
 		return
 	}
@@ -249,12 +248,12 @@ func (s *Sower) movePlot(i interface{}) {
 	duration := time.Since(start)
 
 	// Update available paths
-	s.paths.Update(index, true)
+	s.paths.Update(dstPath, true)
 
 	slog.Default().Info(fmt.Sprintf("Moved %s to %s", srcName, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
 }
 
-func (s *Sower) tunePool() {
+func (s *Sower) getPoolSize() (size int) {
 	poolSize := int(s.cfg.MaxThreads)
 
 	if poolSize == 0 {
@@ -269,5 +268,5 @@ func (s *Sower) tunePool() {
 		poolSize = 1
 	}
 
-	s.movePool.Tune(poolSize)
+	return poolSize
 }
