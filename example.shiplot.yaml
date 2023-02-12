@@ -5,8 +5,10 @@ maxThreads: 3
 stagingPath:
   - "/staging1"
   - "/staging2"
+  - "/staging/*"
 
 # List of paths to move *.plot files to.
 destinationPaths:
   - "/dest1"
   - "/dest2"
+  - "/dest/*"
