@@ -23,7 +23,7 @@ package config
 
 type Config struct {
 	MaxThreads       uint
-	StagingPath      string
+	StagingPaths     []string
 	DestinationPaths []string
 	Port             uint
 }
