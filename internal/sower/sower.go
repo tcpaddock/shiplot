@@ -54,8 +54,22 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s.cfg = cfg
 
 	// Fill list of available destination paths
+	var destPaths []string
+
+	for _, destPath := range s.cfg.DestinationPaths {
+		if strings.Contains(destPath, "*") {
+			globPaths, err := filepath.Glob(destPath)
+			if err != nil {
+				return nil, err
+			}
+
+			destPaths = append(destPaths, globPaths...)
+		} else {
+			destPaths = append(destPaths, destPath)
+		}
+	}
 	s.paths = new(pathList)
-	s.paths.Populate(s.cfg.DestinationPaths)
+	s.paths.Populate(destPaths)
 
 	// Create worker pool for moving plots
 	size := s.getPoolSize()
@@ -83,7 +97,22 @@ func (s *Sower) Run() (err error) {
 	go s.runLoop()
 
 	// Add staging path to watcher
-	for _, stagingPath := range s.cfg.StagingPaths {
+	var stagePaths []string
+
+	for _, stagePath := range s.cfg.StagingPaths {
+		if strings.Contains(stagePath, "*") {
+			globPaths, err := filepath.Glob(stagePath)
+			if err != nil {
+				return err
+			}
+
+			stagePaths = append(stagePaths, globPaths...)
+		} else {
+			stagePaths = append(stagePaths, stagePath)
+		}
+	}
+
+	for _, stagingPath := range stagePaths {
 		// Add staging path to watcher
 		slog.Default().Info(fmt.Sprintf("Starting watcher on %s", stagingPath))
 		err = s.watcher.Add(stagingPath)
