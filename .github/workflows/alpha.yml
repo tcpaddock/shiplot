@@ -1,11 +1,11 @@
-name: main
+name: alpha
 on:
   push:
     branches:
-      - 'main'
+      - 'alpha'
   pull_request:
     branches:
-      - 'main'
+      - 'alpha'
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -29,5 +29,6 @@ jobs:
         with:
           hooks: goreleaser
           allow-initial-development-versions: true
+          prerelease: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
