@@ -99,7 +99,10 @@ func (s *Sower) Run() (err error) {
 	for _, file := range files {
 		if strings.HasSuffix(file.Name(), ".plot") {
 			s.wg.Add(1)
-			s.movePool.Invoke(filepath.Join(s.cfg.StagingPath, file.Name()))
+			err = s.movePool.Invoke(filepath.Join(s.cfg.StagingPath, file.Name()))
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -129,7 +132,10 @@ func (s *Sower) runLoop() {
 
 			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
 				s.wg.Add(1)
-				s.movePool.Invoke(e.Name)
+				err := s.movePool.Invoke(e.Name)
+				if err != nil {
+					slog.Default().Error(fmt.Sprintf("Failed to invoke job for %s", e.Name), err)
+				}
 			}
 		// Read from context for closing
 		case <-s.ctx.Done():

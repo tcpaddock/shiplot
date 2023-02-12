@@ -90,17 +90,11 @@ func (pl *pathList) Update(path *path, available bool) {
 func (pl *pathList) Remove(path *path) {
 	pathListMutex.Lock()
 
-	var newList pathList
-
-	copy(newList, *pl)
-
-	index := slices.Index(newList, path)
+	index := slices.Index(*pl, path)
 
 	if index >= 0 {
-		newList = append(newList[:index], newList[index+1:]...)
+		*pl = append((*pl)[:index], (*pl)[index+1:]...)
 	}
-
-	pl = &newList
 
 	pathListMutex.Unlock()
 }
