@@ -11,6 +11,15 @@
             "mode": "auto",
             "program": "main.go",
             "args": ["run"]
+        },
+        {
+            "name": "Launch Version",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": ["version"],
+            "buildFlags": "-ldflags='-X \"github.com/tcpaddock/shiplot/cmd.version=debug\" -X \"github.com/tcpaddock/shiplot/cmd.buildTarget=debug\" -X \"github.com/tcpaddock/shiplot/cmd.buildDate=debug\"'"
         }
     ]
 }

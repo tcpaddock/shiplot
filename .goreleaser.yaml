@@ -15,3 +15,6 @@ builds:
     ldflags:
       - -extldflags '-static'
       - -s -w
+      - -X github.com/tcpaddock/shiplot/cmd.version={{.Version}}
+      - -X github.com/tcpaddock/shiplot/cmd.buildTarget={{.Target}}
+      - -X github.com/tcpaddock/shiplot/cmd.buildDate={{.Date}}
