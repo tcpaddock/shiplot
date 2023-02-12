@@ -31,8 +31,17 @@ import (
 // runCmd represents the run command
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Starts server",
-	Long:  `Starts server`,
+	Short: "Starts watching staging directories.",
+	Long: `
+Run starts a server thread that begins watching the source
+directories. The file watcher dynamically sizes itself
+based on the lesser value between --maxThreads and the
+number of paths in --destinationPaths. The file watcher
+will automatically remove destination paths that are full.
+The destination path with the most free space will be
+preferred.
+
+`,
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := context.Background()
 		s, err := server.NewServer(ctx, cfg)

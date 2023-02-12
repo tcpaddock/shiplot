@@ -38,8 +38,13 @@ var (
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "shiplot",
-	Short: "Chia plot dispatcher",
-	Long:  `Chia plot dispatcher`,
+	Short: "Show help for shiplot commands and flags.",
+	Long: `
+Shiplot allows you to ship Chia blockchain plot files by
+watching multiple staging directories and concurrently
+copying to multiple destination directories.
+
+`,
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -54,7 +59,7 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.shiplot.yaml or ./.shiplot.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/shiplot.yaml or ./shiplot.yaml)")
 }
 
 // initConfig reads in config file and ENV variables if set.
