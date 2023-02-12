@@ -1,0 +1,11 @@
+{
+  "maintainedVersion": "beta",
+  "plugins": {
+    "provider": {
+      "name": "github",
+      "options": {
+        "prerelease": true
+      }
+    }
+  }
+}

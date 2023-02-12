@@ -3,9 +3,13 @@ on:
   push:
     branches:
       - 'main'
+      - 'beta'
+      - 'alpha'
   pull_request:
     branches:
       - 'main'
+      - 'beta'
+      - 'alpha'
 jobs:
   lint:
     runs-on: ubuntu-latest
