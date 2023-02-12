@@ -47,7 +47,7 @@ For example:
 $ shiplot version
 shiplot v1.0.0
 - build target: linux_amd64
-- build date: 2006-01-02T15:04:05Z07:00
+- build date: 2006-01-02T15:04:05Z
 - os type: linux
 - os arch: amd64
 	
