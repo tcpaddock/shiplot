@@ -1,5 +1,5 @@
 /*
-Copyright © 2023 Taylor Paddock <tcpaddock@gmail.com>
+Copyright © 2023 Taylor Paddock
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -68,14 +68,14 @@ func initConfig() {
 		home, err := os.UserHomeDir()
 		cobra.CheckErr(err)
 
-		// Search config in home directory with name ".shiplot" (without extension).
+		// Search config in home directory with name "shiplot" (without extension).
 		viper.AddConfigPath(home)
 
-		// Search config in current working directory with name ".shiplot" (without extension).
+		// Search config in current working directory with name "shiplot" (without extension).
 		viper.AddConfigPath(".")
 
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".shiplot")
+		viper.SetConfigName("shiplot")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
