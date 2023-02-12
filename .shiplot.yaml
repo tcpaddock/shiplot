@@ -1,5 +1,0 @@
-threads: 1
-stagingPath: "C:\\temp\\stage"
-destinationPaths:
-  - "C:\\temp\\dest1"
-  - "C:\\temp\\dest2"

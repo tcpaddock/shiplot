@@ -16,3 +16,6 @@
 
 # Build outputs
 /bin
+
+# Shiplot config
+shiplot.yaml
