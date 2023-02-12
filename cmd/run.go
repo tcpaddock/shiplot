@@ -57,6 +57,6 @@ func init() {
 
 	runCmd.PersistentFlags().UintVar(&cfg.MaxThreads, "maxThreads", 4, "Number of concurrent file transfers (default is 4)")
 	runCmd.PersistentFlags().UintVar(&cfg.Port, "port", 9080, "Server listen port (default is 9080)")
-	runCmd.PersistentFlags().StringVar(&cfg.StagingPath, "stagingPath", "", "Directory on fast storage used to stage plots")
+	runCmd.PersistentFlags().StringArrayVar(&cfg.StagingPaths, "stagingPaths", nil, "Directory on fast storage used to stage plots")
 	runCmd.PersistentFlags().StringArrayVar(&cfg.DestinationPaths, "destinationPaths", nil, "Directories for final plot storage")
 }
