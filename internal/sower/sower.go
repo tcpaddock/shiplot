@@ -83,25 +83,28 @@ func (s *Sower) Run() (err error) {
 	go s.runLoop()
 
 	// Add staging path to watcher
-	slog.Default().Info(fmt.Sprintf("Starting watcher on %s", s.cfg.StagingPath))
-	err = s.watcher.Add(s.cfg.StagingPath)
-	if err != nil {
-		s.Close()
-		return err
-	}
+	for _, stagingPath := range s.cfg.StagingPaths {
+		// Add staging path to watcher
+		slog.Default().Info(fmt.Sprintf("Starting watcher on %s", stagingPath))
+		err = s.watcher.Add(stagingPath)
+		if err != nil {
+			s.Close()
+			return err
+		}
 
-	// Move existing plots
-	files, err := os.ReadDir(s.cfg.StagingPath)
-	if err != nil {
-		return err
-	}
+		// Move existing plots
+		files, err := os.ReadDir(stagingPath)
+		if err != nil {
+			return err
+		}
 
-	for _, file := range files {
-		if strings.HasSuffix(file.Name(), ".plot") {
-			s.wg.Add(1)
-			err = s.movePool.Invoke(filepath.Join(s.cfg.StagingPath, file.Name()))
-			if err != nil {
-				return err
+		for _, file := range files {
+			if strings.HasSuffix(file.Name(), ".plot") {
+				s.wg.Add(1)
+				err = s.movePool.Invoke(filepath.Join(stagingPath, file.Name()))
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}

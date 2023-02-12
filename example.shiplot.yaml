@@ -1,8 +1,10 @@
 # Maximum number of concurrent file transfers
 maxThreads: 3
 
-# The path that is watched for new *.plot files.
-stagingPath: "/staging"
+# The paths that are watched for new *.plot files.
+stagingPath:
+  - "/staging1"
+  - "/staging2"
 
 # List of paths to move *.plot files to.
 destinationPaths:
