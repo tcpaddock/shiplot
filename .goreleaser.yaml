@@ -18,3 +18,12 @@ builds:
       - -X github.com/tcpaddock/shiplot/cmd.version={{ .Version }}
       - -X github.com/tcpaddock/shiplot/cmd.buildTarget={{ .Os }}_{{ .Arch }}
       - -X github.com/tcpaddock/shiplot/cmd.buildDate={{.Date}}
+archives:
+  -
+    format_overrides:  
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - example.shiplot.yaml
