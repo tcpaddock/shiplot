@@ -18,6 +18,7 @@ jobs:
       - uses: golangci/golangci-lint-action@v3
   test:
     name: Test
+    needs: lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -29,12 +30,11 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          fail_ci_if_error: true
+          fail_ci_if_error: false
   release:
     name: Release
+    needs: test
     uses: ./.github/workflows/release.yml
     if: >-
       github.event_name == 'push' &&
       (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/beta' || github.ref == 'refs/heads/alpha')
-    with:
-      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}

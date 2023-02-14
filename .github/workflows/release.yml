@@ -1,15 +1,10 @@
 name: Release
 on:
   workflow_call:
-    secrets:
-      GITHUB_TOKEN:
-        required: true
-
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
     steps:
@@ -30,5 +25,5 @@ jobs:
         run: npm install
       - name: Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
