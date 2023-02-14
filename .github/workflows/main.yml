@@ -16,6 +16,7 @@ jobs:
       - uses: go-semantic-release/action@v1
         with:
           hooks: goreleaser
+          custom-arguments: --provider-opt github_use_compare_commits=true
           allow-initial-development-versions: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
