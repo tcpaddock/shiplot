@@ -1,14 +1,15 @@
 name: Release
 on:
-  push:
-    branches:
-      - 'main'
-      - 'beta'
-      - 'alpha'
+  workflow_call:
+    secrets:
+      GITHUB_TOKEN:
+        required: true
+
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: write
     steps:
@@ -16,7 +17,7 @@ jobs:
       - name: Install Node
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: '18'
       - name: Install Go
         uses: actions/setup-go@v3
         with:
@@ -25,6 +26,8 @@ jobs:
         uses: goreleaser/goreleaser-action@v4
         with:
           install-only: true
+      - name: Install semantic-release
+        run: npm install
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
