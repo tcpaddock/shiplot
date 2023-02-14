@@ -1,0 +1,26 @@
+{
+    "preset": "conventionalcommit",
+    "branches": [
+        "main",
+        {
+            "name": "beta",
+            "prerelease": true
+        },
+        {
+            "name": "alpha",
+            "prerelease": true
+        }
+    ],
+    "plugins": [
+        "@semantic-release/commit-analyzer",
+        "@semantic-release/release-notes-generator",
+        "@semantic-release/github", 
+        [
+            "@semantic-release/exec",
+            {
+                "prepareCmd": "echo \"${nextRelease.notes}\" > /tmp/release-notes.md",
+                "publishCmd": "goreleaser release --release-notes /tmp/release-notes.md --clean"
+            }
+        ]
+    ]
+  }
