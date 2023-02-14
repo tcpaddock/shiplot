@@ -38,10 +38,32 @@ func TestLen(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		// Arrange
 		pl := new(pathList)
+		for _, p := range test.inputPaths {
+			*pl = append(*pl, &path{name: p, usage: nil, available: true})
+		}
+		expected := test.expectedCount
 
-		pl.Populate(test.inputPaths)
+		// Act
+		actual := pl.Len()
 
-		require.Equal(t, test.expectedCount, pl.Len())
+		// Assert
+		require.Equal(t, expected, actual)
 	}
+}
+
+func TestSwap(t *testing.T) {
+	// Arrange
+	pl := new(pathList)
+	*pl = append(*pl, &path{name: "/test1", usage: nil, available: true})
+	*pl = append(*pl, &path{name: "/test2", usage: nil, available: true})
+	expected := pathList{(*pl)[1], (*pl)[0]}
+
+	// Act
+	pl.Swap(0, 1)
+	actual := *pl
+
+	// Assert
+	require.Equal(t, expected, actual)
 }
