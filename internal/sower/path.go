@@ -29,14 +29,9 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-//go:generate mockery --name DiskUsage
-type DiskUsage interface {
-	Free() uint64
-}
-
 type path struct {
 	name      string
-	usage     DiskUsage
+	usage     *du.DiskUsage
 	available bool
 }
 
@@ -48,7 +43,7 @@ func (pl *pathList) Len() int { return len(*pl) }
 
 func (pl *pathList) Swap(i, j int) { (*pl)[i], (*pl)[j] = (*pl)[j], (*pl)[i] }
 
-func (pl *pathList) Less(i, j int) bool { return (*pl)[i].usage.Free() < (*pl)[j].usage.Free() }
+func (pl *pathList) Less(i, j int) bool { return (*pl)[i].usage.Free() > (*pl)[j].usage.Free() }
 
 func (pl *pathList) Populate(paths []string) {
 	pathListMutex.Lock()
