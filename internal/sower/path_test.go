@@ -67,3 +67,21 @@ func TestSwap(t *testing.T) {
 	// Assert
 	require.Equal(t, expected, actual)
 }
+
+func TestLess(t *testing.T) {
+	// Arrange
+	du1 := MockDiskUsage{}
+	du1.On("Free").Return(uint64(2))
+	du2 := MockDiskUsage{}
+	du2.On("Free").Return(uint64(1))
+	pl := new(pathList)
+	*pl = append(*pl, &path{name: "/test1", usage: &du1, available: true})
+	*pl = append(*pl, &path{name: "/test2", usage: &du2, available: true})
+	expected := true
+
+	// Act
+	actual := pl.Less(0, 1)
+
+	// Assert
+	require.Equal(t, expected, actual)
+}

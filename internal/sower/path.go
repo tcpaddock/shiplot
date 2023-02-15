@@ -29,9 +29,14 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+//go:generate mockery --name DiskUsage
+type DiskUsage interface {
+	Free() uint64
+}
+
 type path struct {
 	name      string
-	usage     *du.DiskUsage
+	usage     DiskUsage
 	available bool
 }
 
