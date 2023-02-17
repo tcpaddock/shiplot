@@ -25,6 +25,7 @@ type Config struct {
 	MaxThreads       uint
 	StagingPaths     []string
 	DestinationPaths []string
+	Ip               string
 	Port             uint
 }
 

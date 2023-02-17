@@ -71,15 +71,28 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s.paths = new(pathList)
 	s.paths.Populate(destPaths)
 
-	// Create worker pool for moving plots
-	size := s.getPoolSize()
-	slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
-	s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
-		s.movePlot(i)
-		s.wg.Done()
-	})
-	if err != nil {
-		return nil, err
+	if s.cfg.Port == 0 {
+		// Create worker pool for moving plots from filesystem
+		size := s.getPoolSize()
+		slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
+		s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
+			s.movePlot(i)
+			s.wg.Done()
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Create worker pool for moving plots from stream
+		size := s.getPoolSize()
+		slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
+		s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
+			s.streamPlot(i)
+			s.wg.Done()
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return s, nil
@@ -176,6 +189,20 @@ func (s *Sower) runLoop() {
 			return
 		}
 	}
+}
+
+func (s *Sower) StreamPlot(name string, size uint64, reader io.Reader) (err error) {
+	// TODO
+	err = s.movePool.Invoke()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Sower) streamPlot(i interface{}) {
+
 }
 
 func (s *Sower) movePlot(i interface{}) {
