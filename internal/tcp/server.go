@@ -87,7 +87,6 @@ func (s *Server) runLoop() {
 }
 
 func (s *Server) handleRequest(conn net.Conn) {
-	// Read file name
 	fileName, err := readFileName(conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file name from request", err)
@@ -102,7 +101,12 @@ func (s *Server) handleRequest(conn net.Conn) {
 		return
 	}
 
-	s.sower.StreamPlot()
+	s.sower.StreamPlot(fileName, fileSize, conn)
+	if err != nil {
+		slog.Default().Error("Failed to read file from request", err)
+		conn.Write([]byte{0})
+		return
+	}
 
 	conn.Write([]byte{1})
 }
@@ -116,7 +120,7 @@ func readFileName(conn net.Conn) (name string, err error) {
 
 	fileName := string(fileNameBytes)
 	if !strings.HasSuffix(fileName, ".plot.tmp") {
-		return "", fmt.Errorf("Request provided incorrect file name %s", fileName)
+		return "", fmt.Errorf("request provided incorrect file name %s", fileName)
 	}
 
 	return fileName, nil

@@ -47,6 +47,12 @@ type Sower struct {
 	wg       sync.WaitGroup
 }
 
+type plotStream struct {
+	name   string
+	size   uint64
+	reader io.Reader
+}
+
 func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s = new(Sower)
 
@@ -192,8 +198,7 @@ func (s *Sower) runLoop() {
 }
 
 func (s *Sower) StreamPlot(name string, size uint64, reader io.Reader) (err error) {
-	// TODO
-	err = s.movePool.Invoke()
+	err = s.movePool.Invoke(plotStream{name: name, size: size, reader: reader})
 	if err != nil {
 		return err
 	}
@@ -202,7 +207,61 @@ func (s *Sower) StreamPlot(name string, size uint64, reader io.Reader) (err erro
 }
 
 func (s *Sower) streamPlot(i interface{}) {
+	ps := i.(plotStream)
 
+	// Find the best destination path
+	dstPath := s.getDestinationPath(ps.size)
+
+	var (
+		dstDir      = dstPath.name
+		dstFullName = filepath.Join(dstDir, ps.name)
+	)
+
+	slog.Default().Info(fmt.Sprintf("Moving %s to %s", ps.name, dstDir))
+
+	// Open destination file
+	dst, err := os.Create(dstFullName + ".tmp")
+	if err != nil {
+		dst.Close()
+		s.paths.Update(dstPath, true)
+		slog.Default().Error(fmt.Sprintf("Failed to create temp file %s", dstFullName+".tmp"), err)
+		return
+	}
+
+	start := time.Now()
+
+	// Copy plot to temporary file
+	written, err := io.Copy(dst, ps.reader)
+	if err != nil {
+		dst.Close()
+		s.paths.Update(dstPath, true)
+		slog.Default().Error(fmt.Sprintf("Failed to copy %s to %s", ps.name, dstFullName+".tmp"), err)
+		return
+	}
+
+	// Rename temporary file
+	err = os.Rename(dstFullName+".tmp", dstFullName)
+	if err != nil {
+		dst.Close()
+		s.paths.Update(dstPath, true)
+		slog.Default().Error(fmt.Sprintf("Failed to rename %s to %s", dstFullName+".tmp", dstFullName), err)
+		return
+	}
+
+	duration := time.Since(start)
+
+	// Close destination file
+	err = dst.Close()
+	if err != nil {
+		s.paths.Update(dstPath, true)
+		slog.Default().Error(fmt.Sprintf("Failed to close %s", dstFullName), err)
+		return
+	}
+
+	// Update available paths
+	s.paths.Update(dstPath, true)
+
+	slog.Default().Info(fmt.Sprintf("Moved %s to %s", ps.name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
 }
 
 func (s *Sower) movePlot(i interface{}) {
@@ -228,34 +287,7 @@ func (s *Sower) movePlot(i interface{}) {
 	}
 
 	// Find the best destination path
-	var dstPath *path
-
-	for {
-		// Gets the lowest sized first path and marks it unavailable
-		dstPath = s.paths.FirstAvailable()
-
-		// Wait for 10 seconds if no available destination
-		if dstPath == nil {
-			time.Sleep(time.Second * 10)
-			continue
-		}
-
-		// Ensure destination path has enough space
-		if uint64(srcInfo.Size()) < dstPath.usage.Free() {
-			break
-		} else {
-			// Remove path if space is too low
-			s.paths.Remove(dstPath)
-
-			// Adjust move pool
-			size := s.getPoolSize()
-			if s.movePool.Cap() != size {
-				slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
-				s.movePool.Tune(size)
-			}
-			continue
-		}
-	}
+	dstPath := s.getDestinationPath(uint64(srcInfo.Size()))
 
 	var (
 		dstDir      = dstPath.name
@@ -325,6 +357,40 @@ func (s *Sower) movePlot(i interface{}) {
 	s.paths.Update(dstPath, true)
 
 	slog.Default().Info(fmt.Sprintf("Moved %s to %s", srcName, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+}
+
+func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
+	// Find the best destination path
+	var dstPath *path
+
+	for {
+		// Gets the lowest sized first path and marks it unavailable
+		dstPath = s.paths.FirstAvailable()
+
+		// Wait for 10 seconds if no available destination
+		if dstPath == nil {
+			time.Sleep(time.Second * 10)
+			continue
+		}
+
+		// Ensure destination path has enough space
+		if uint64(fileSize) < dstPath.usage.Free() {
+			break
+		} else {
+			// Remove path if space is too low
+			s.paths.Remove(dstPath)
+
+			// Adjust move pool
+			size := s.getPoolSize()
+			if s.movePool.Cap() != size {
+				slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
+				s.movePool.Tune(size)
+			}
+			continue
+		}
+	}
+
+	return dstPath
 }
 
 func (s *Sower) getPoolSize() (size int) {
