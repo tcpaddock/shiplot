@@ -26,6 +26,7 @@ import (
 
 	"github.com/tcpaddock/shiplot/internal/config"
 	"github.com/tcpaddock/shiplot/internal/sower"
+	"github.com/tcpaddock/shiplot/internal/tcp"
 	"golang.org/x/exp/slog"
 )
 
@@ -34,6 +35,7 @@ type Server struct {
 	cancel context.CancelFunc
 	cfg    config.Config
 	sower  *sower.Sower
+	server *tcp.Server
 }
 
 func NewServer(ctx context.Context, cfg config.Config) (s *Server, err error) {
@@ -45,12 +47,19 @@ func NewServer(ctx context.Context, cfg config.Config) (s *Server, err error) {
 	if err != nil {
 		return nil, err
 	}
+	s.server = tcp.NewServer(s.ctx, cfg, s.sower)
 
 	return s, nil
 }
 
 func (s *Server) Start() (err error) {
-	slog.Default().Info("Starting server")
+	if s.cfg.Server.Enabled {
+		slog.Default().Info("Starting server")
+		s.server.Run()
+		if err != nil {
+			return err
+		}
+	}
 
 	err = s.sower.Run()
 	if err != nil {

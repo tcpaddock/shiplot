@@ -41,21 +41,18 @@ type Server struct {
 	listener net.Listener
 }
 
-func NewServer(ctx context.Context, cfg config.Config, sower *sower.Sower) (s *Server, err error) {
+func NewServer(ctx context.Context, cfg config.Config, sower *sower.Sower) (s *Server) {
 	s = new(Server)
 
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cfg = cfg
 	s.sower = sower
-	if err != nil {
-		return nil, err
-	}
 
-	return s, nil
+	return s
 }
 
 func (s *Server) Run() (err error) {
-	endpoint := fmt.Sprintf("%s:%d", s.cfg.Ip, s.cfg.Port)
+	endpoint := fmt.Sprintf("%s:%d", s.cfg.Server.Ip, s.cfg.Server.Port)
 	slog.Default().Info(fmt.Sprintf("Starting TCP server on %s", endpoint))
 	s.listener, err = net.Listen("tcp", endpoint)
 	if err != nil {
@@ -101,7 +98,7 @@ func (s *Server) handleRequest(conn net.Conn) {
 		return
 	}
 
-	s.sower.StreamPlot(fileName, fileSize, conn)
+	err = s.sower.SavePlot(fileName, fileSize, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file from request", err)
 		conn.Write([]byte{0})

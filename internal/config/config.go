@@ -25,8 +25,16 @@ type Config struct {
 	MaxThreads       uint
 	StagingPaths     []string
 	DestinationPaths []string
-	Ip               string
-	Port             uint
+	Server           struct {
+		Enabled bool
+		Ip      string
+		Port    uint16
+	}
+	Client struct {
+		Enabled    bool
+		ServerIp   string
+		ServerPort uint16
+	}
 }
 
 func NewConfig() *Config {

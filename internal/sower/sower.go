@@ -25,6 +25,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,19 +40,13 @@ import (
 )
 
 type Sower struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	cfg      config.Config
-	paths    *pathList
-	movePool *ants.PoolWithFunc
-	watcher  *fsnotify.Watcher
-	wg       sync.WaitGroup
-}
-
-type plotStream struct {
-	name   string
-	size   uint64
-	reader io.Reader
+	ctx     context.Context
+	cancel  context.CancelFunc
+	cfg     config.Config
+	paths   *pathList
+	pool    *ants.Pool
+	watcher *fsnotify.Watcher
+	wg      sync.WaitGroup
 }
 
 func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
@@ -77,28 +73,12 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s.paths = new(pathList)
 	s.paths.Populate(destPaths)
 
-	if s.cfg.Port == 0 {
-		// Create worker pool for moving plots from filesystem
-		size := s.getPoolSize()
-		slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
-		s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
-			s.movePlot(i)
-			s.wg.Done()
-		})
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Create worker pool for moving plots from stream
-		size := s.getPoolSize()
-		slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
-		s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
-			s.streamPlot(i)
-			s.wg.Done()
-		})
-		if err != nil {
-			return nil, err
-		}
+	// Create worker pool for moving plots from stream
+	size := s.getPoolSize()
+	slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
+	s.pool, err = ants.NewPool(size)
+	if err != nil {
+		return nil, err
 	}
 
 	return s, nil
@@ -148,10 +128,9 @@ func (s *Sower) Run() (err error) {
 
 		for _, file := range files {
 			if strings.HasSuffix(file.Name(), ".plot") {
-				s.wg.Add(1)
-				err = s.movePool.Invoke(filepath.Join(stagingPath, file.Name()))
+				err := s.SavePlot(file.Name(), 0, nil)
 				if err != nil {
-					return err
+					slog.Default().Error(fmt.Sprintf("failed to move %s", file.Name()), err)
 				}
 			}
 		}
@@ -182,23 +161,39 @@ func (s *Sower) runLoop() {
 			}
 
 			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
-				s.wg.Add(1)
-				err := s.movePool.Invoke(e.Name)
+				err := s.SavePlot(e.Name, 0, nil)
 				if err != nil {
-					slog.Default().Error(fmt.Sprintf("Failed to invoke job for %s", e.Name), err)
+					slog.Default().Error(fmt.Sprintf("failed to save %s", e.Name), err)
 				}
 			}
 		// Read from context for closing
 		case <-s.ctx.Done():
 			s.watcher.Close()
-			s.movePool.Release()
+			s.pool.Release()
 			return
 		}
 	}
 }
 
-func (s *Sower) StreamPlot(name string, size uint64, reader io.Reader) (err error) {
-	err = s.movePool.Invoke(plotStream{name: name, size: size, reader: reader})
+func (s *Sower) SavePlot(name string, size uint64, conn net.Conn) (err error) {
+	s.wg.Add(1)
+	err = s.pool.Submit(func() {
+		defer s.wg.Done()
+
+		if conn != nil {
+			err := s.savePlot(name, size, conn)
+			if err != nil {
+				conn.Write([]byte{0})
+				conn.Close()
+				slog.Default().Error(fmt.Sprintf("failed to save %s", name), err)
+			}
+		} else {
+			err := s.movePlot(name)
+			if err != nil {
+				slog.Default().Error(fmt.Sprintf("failed to move %s", name), err)
+			}
+		}
+	})
 	if err != nil {
 		return err
 	}
@@ -206,37 +201,40 @@ func (s *Sower) StreamPlot(name string, size uint64, reader io.Reader) (err erro
 	return nil
 }
 
-func (s *Sower) streamPlot(i interface{}) {
-	ps := i.(plotStream)
-
+func (s *Sower) savePlot(name string, size uint64, reader io.Reader) (err error) {
 	// Find the best destination path
-	dstPath := s.getDestinationPath(ps.size)
+	dstPath := s.getDestinationPath(size)
 
 	var (
 		dstDir      = dstPath.name
-		dstFullName = filepath.Join(dstDir, ps.name)
+		dstFullName = filepath.Join(dstDir, name)
 	)
 
-	slog.Default().Info(fmt.Sprintf("Moving %s to %s", ps.name, dstDir))
+	slog.Default().Info(fmt.Sprintf("Moving %s to %s", name, dstDir))
 
 	// Open destination file
 	dst, err := os.Create(dstFullName + ".tmp")
 	if err != nil {
 		dst.Close()
 		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to create temp file %s", dstFullName+".tmp"), err)
-		return
+		return err
 	}
 
 	start := time.Now()
 
 	// Copy plot to temporary file
-	written, err := io.Copy(dst, ps.reader)
+	written, err := io.Copy(dst, reader)
 	if err != nil {
 		dst.Close()
 		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to copy %s to %s", ps.name, dstFullName+".tmp"), err)
-		return
+		return err
+	}
+
+	if uint64(written) != size {
+		dst.Close()
+		os.Remove(dstFullName + ".tmp")
+		s.paths.Update(dstPath, true)
+		return fmt.Errorf("file size mismatch on %s", name)
 	}
 
 	// Rename temporary file
@@ -244,8 +242,7 @@ func (s *Sower) streamPlot(i interface{}) {
 	if err != nil {
 		dst.Close()
 		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to rename %s to %s", dstFullName+".tmp", dstFullName), err)
-		return
+		return err
 	}
 
 	duration := time.Since(start)
@@ -254,109 +251,48 @@ func (s *Sower) streamPlot(i interface{}) {
 	err = dst.Close()
 	if err != nil {
 		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to close %s", dstFullName), err)
-		return
+		return err
 	}
 
 	// Update available paths
 	s.paths.Update(dstPath, true)
 
-	slog.Default().Info(fmt.Sprintf("Moved %s to %s", ps.name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	slog.Default().Info(fmt.Sprintf("Moved %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+
+	return nil
 }
 
-func (s *Sower) movePlot(i interface{}) {
-	var (
-		srcFullName = i.(string)
-		srcName     = filepath.Base(srcFullName)
-	)
-
+func (s *Sower) openFile(name string) (info fs.FileInfo, file *os.File, err error) {
 	// Open source file
-	src, err := os.Open(srcFullName)
+	file, err = os.Open(name)
 	if err != nil {
-		src.Close()
-		slog.Default().Error(fmt.Sprintf("Failed to open %s", srcFullName), err)
-		return
+		file.Close()
+		return nil, nil, err
 	}
 
 	// Get source file size
-	srcInfo, err := src.Stat()
+	info, err = file.Stat()
 	if err != nil {
-		src.Close()
-		slog.Default().Error(fmt.Sprintf("Failed to get the file size of %s", srcFullName), err)
-		return
+		file.Close()
+		return nil, nil, err
 	}
 
-	// Find the best destination path
-	dstPath := s.getDestinationPath(uint64(srcInfo.Size()))
+	return info, file, err
+}
 
-	var (
-		dstDir      = dstPath.name
-		dstFullName = filepath.Join(dstDir, srcName)
-	)
-
-	slog.Default().Info(fmt.Sprintf("Moving %s to %s", srcName, dstDir))
-
-	// Open destination file
-	dst, err := os.Create(dstFullName + ".tmp")
+func (s *Sower) movePlot(name string) (err error) {
+	info, file, err := s.openFile(name)
+	defer file.Close()
 	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to create temp file %s", dstFullName+".tmp"), err)
-		return
+		return err
 	}
 
-	start := time.Now()
-
-	// Copy plot to temporary file
-	written, err := io.Copy(dst, src)
+	err = s.savePlot(info.Name(), uint64(info.Size()), file)
 	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to copy %s to %s", srcFullName, dstFullName+".tmp"), err)
-		return
+		return err
 	}
 
-	// Rename temporary file
-	err = os.Rename(dstFullName+".tmp", dstFullName)
-	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to rename %s to %s", dstFullName+".tmp", dstFullName), err)
-		return
-	}
-
-	duration := time.Since(start)
-
-	// Close source file
-	err = src.Close()
-	if err != nil {
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to close %s", srcFullName), err)
-		return
-	}
-
-	// Close destination file
-	err = dst.Close()
-	if err != nil {
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to close %s", dstFullName), err)
-		return
-	}
-
-	// Move succeeded, delete source
-	err = os.Remove(src.Name())
-	if err != nil {
-		slog.Default().Error(fmt.Sprintf("Failed to delete %s", src.Name()), err)
-		return
-	}
-
-	// Update available paths
-	s.paths.Update(dstPath, true)
-
-	slog.Default().Info(fmt.Sprintf("Moved %s to %s", srcName, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	return nil
 }
 
 func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
@@ -364,7 +300,7 @@ func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
 	var dstPath *path
 
 	for {
-		// Gets the lowest sized first path and marks it unavailable
+		// Get the lowest sized first path and mark it unavailable
 		dstPath = s.paths.FirstAvailable()
 
 		// Wait for 10 seconds if no available destination
@@ -382,9 +318,9 @@ func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
 
 			// Adjust move pool
 			size := s.getPoolSize()
-			if s.movePool.Cap() != size {
+			if s.pool.Cap() != size {
 				slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
-				s.movePool.Tune(size)
+				s.pool.Tune(size)
 			}
 			continue
 		}

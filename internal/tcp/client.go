@@ -22,6 +22,9 @@ THE SOFTWARE.
 package tcp
 
 import (
+	"fmt"
+	"net"
+
 	"github.com/tcpaddock/shiplot/internal/config"
 	"github.com/tcpaddock/shiplot/internal/sower"
 )
@@ -38,4 +41,18 @@ func NewClient(cfg config.Config, sower *sower.Sower) (c *Client) {
 	c.sower = sower
 
 	return c
+}
+
+func (c *Client) SendPlot(name string) (err error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", c.cfg.Client.ServerIp, c.cfg.Client.ServerPort))
+	if err != nil {
+		return err
+	}
+
+	_, err = net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
