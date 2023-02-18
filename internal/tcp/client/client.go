@@ -19,37 +19,89 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package tcp
+package client
 
 import (
+	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 
 	"github.com/tcpaddock/shiplot/internal/config"
-	"github.com/tcpaddock/shiplot/internal/sower"
 )
 
 type Client struct {
-	cfg   config.Config
-	sower *sower.Sower
+	cfg config.Config
 }
 
-func NewClient(cfg config.Config, sower *sower.Sower) (c *Client) {
+func NewClient(cfg config.Config) (c *Client) {
 	c = new(Client)
 
 	c.cfg = cfg
-	c.sower = sower
 
 	return c
 }
 
-func (c *Client) SendPlot(name string) (err error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", c.cfg.Client.ServerIp, c.cfg.Client.ServerPort))
+func (c *Client) SendPlot(name string, size uint64, reader io.Reader, conn *net.TCPConn) (err error) {
+	err = writeFileName(name, conn)
 	if err != nil {
 		return err
 	}
 
-	_, err = net.DialTCP("tcp", nil, tcpAddr)
+	err = writeFileSize(size, conn)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(conn, reader)
+	if err != nil {
+		return err
+	}
+
+	result := make([]byte, 1)
+	conn.Read(result)
+
+	if result[0] == 0 {
+		return fmt.Errorf("server returned failure code")
+	}
+
+	return nil
+}
+
+func (c *Client) Connect() (conn *net.TCPConn, err error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%d", c.cfg.Client.ServerIp, c.cfg.Client.ServerPort))
+	if err != nil {
+		return nil, err
+	}
+
+	conn, err = net.DialTCP("tcp", nil, tcpAddr)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
+}
+
+func writeFileName(name string, conn *net.TCPConn) (err error) {
+	fileNameSizeByte := byte(len(name))
+	fileNameBytes := []byte(name)
+	_, err = conn.Write([]byte{fileNameSizeByte})
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Write(fileNameBytes)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func writeFileSize(size uint64, conn *net.TCPConn) (err error) {
+	fileSizeBytes := make([]byte, 8)
+	binary.LittleEndian.PutUint64(fileSizeBytes, size)
+	_, err = conn.Write(fileSizeBytes)
 	if err != nil {
 		return err
 	}

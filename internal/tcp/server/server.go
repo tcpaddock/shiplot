@@ -19,7 +19,7 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package tcp
+package server
 
 import (
 	"context"
@@ -109,14 +109,20 @@ func (s *Server) handleRequest(conn net.Conn) {
 }
 
 func readFileName(conn net.Conn) (name string, err error) {
-	fileNameBytes := make([]byte, 256)
+	fileNameSizeBytes := make([]byte, 1)
+	_, err = conn.Read(fileNameSizeBytes)
+	if err != nil {
+		return "", err
+	}
+
+	fileNameBytes := make([]byte, int(fileNameSizeBytes[0]))
 	_, err = conn.Read(fileNameBytes)
 	if err != nil {
 		return "", err
 	}
 
 	fileName := string(fileNameBytes)
-	if !strings.HasSuffix(fileName, ".plot.tmp") {
+	if !strings.HasSuffix(fileName, ".plot") {
 		return "", fmt.Errorf("request provided incorrect file name %s", fileName)
 	}
 

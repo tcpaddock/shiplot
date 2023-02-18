@@ -22,13 +22,13 @@ client:
 
 
 # The paths that are watched for new *.plot files.
-stagingPath:
+stagingPaths:
   - "/staging1"
-  - "/staging2"
-  - "/staging/*"
+  - "/staging2/*"
+  - "/staging3/*/plots"
 
 # List of paths to move *.plot files to.
 destinationPaths:
   - "/dest1"
-  - "/dest2"
-  - "/dest/*"
+  - "/dest2/*"
+  - "/dest3/*/plots"

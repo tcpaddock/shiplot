@@ -36,6 +36,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/panjf2000/ants/v2"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"github.com/tcpaddock/shiplot/internal/tcp/client"
 	"golang.org/x/exp/slog"
 )
 
@@ -47,6 +48,7 @@ type Sower struct {
 	pool    *ants.Pool
 	watcher *fsnotify.Watcher
 	wg      sync.WaitGroup
+	client  *client.Client
 }
 
 func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
@@ -54,6 +56,7 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cfg = cfg
+	s.client = client.NewClient(cfg)
 
 	// Fill list of available destination paths
 	var destPaths []string
@@ -128,7 +131,13 @@ func (s *Sower) Run() (err error) {
 
 		for _, file := range files {
 			if strings.HasSuffix(file.Name(), ".plot") {
-				err := s.SavePlot(file.Name(), 0, nil)
+				info, err := file.Info()
+				if err != nil {
+					slog.Default().Error(fmt.Sprintf("failed to move %s", file.Name()), err)
+				}
+
+				fullName := filepath.Join(stagingPath, file.Name())
+				err = s.SavePlot(fullName, uint64(info.Size()), nil)
 				if err != nil {
 					slog.Default().Error(fmt.Sprintf("failed to move %s", file.Name()), err)
 				}
@@ -180,8 +189,21 @@ func (s *Sower) SavePlot(name string, size uint64, conn net.Conn) (err error) {
 	err = s.pool.Submit(func() {
 		defer s.wg.Done()
 
-		if conn != nil {
-			err := s.savePlot(name, size, conn)
+		if s.cfg.Client.Enabled {
+			conn, err := s.client.Connect()
+			if err != nil {
+				slog.Default().Error("failed to connect to server", err)
+			}
+
+			defer conn.Close()
+
+			err = s.uploadPlot(name, conn)
+			if err != nil {
+				slog.Default().Error(fmt.Sprintf("failed to upload file %s", name), err)
+			}
+		} else if conn != nil {
+			fileName := filepath.Base(name)
+			err := s.savePlot(fileName, size, conn)
 			if err != nil {
 				conn.Write([]byte{0})
 				conn.Close()
@@ -278,6 +300,25 @@ func (s *Sower) openFile(name string) (info fs.FileInfo, file *os.File, err erro
 	}
 
 	return info, file, err
+}
+
+func (s *Sower) uploadPlot(name string, conn *net.TCPConn) (err error) {
+	slog.Default().Info(fmt.Sprintf("Uploading %s", name))
+
+	info, file, err := s.openFile(name)
+	defer file.Close()
+	if err != nil {
+		return err
+	}
+
+	err = s.client.SendPlot(name, uint64(info.Size()), file, conn)
+	if err != nil {
+		return err
+	}
+
+	slog.Default().Info(fmt.Sprintf("Successfully uploaded %s", name))
+
+	return nil
 }
 
 func (s *Sower) movePlot(name string) (err error) {
