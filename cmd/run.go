@@ -43,11 +43,11 @@ preferred.
 
 `,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := context.Background()
-		s, err := server.NewServer(ctx, cfg)
+		s, err := server.NewServer(cfg)
 		cobra.CheckErr(err)
 
-		err = s.Start()
+		ctx := context.Background()
+		err = s.Start(ctx)
 		cobra.CheckErr(err)
 	},
 }

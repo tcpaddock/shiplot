@@ -36,7 +36,7 @@ type TcpClient struct {
 	cfg config.Config
 }
 
-func NewClient(cfg config.Config) (c *TcpClient) {
+func NewTcpClient(cfg config.Config) (c *TcpClient) {
 	c = new(TcpClient)
 
 	c.cfg = cfg
@@ -44,35 +44,35 @@ func NewClient(cfg config.Config) (c *TcpClient) {
 	return c
 }
 
-func (c *TcpClient) WritePlot(ctx context.Context, name string, size uint64, reader io.Reader) (err error) {
+func (c *TcpClient) WritePlot(ctx context.Context, name string, size uint64, reader io.Reader) (written int64, err error) {
 	conn, err := c.connect()
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	defer conn.Close()
 
-	err = writeFileName(name, conn)
+	_, err = c.writeFileName(ctx, name, conn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	err = writeFileSize(size, conn)
+	_, err = c.writeFileSize(ctx, size, conn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = writePlot(ctx, reader, conn)
+	written, err = c.writePlot(ctx, reader, conn)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	ok := readResult(conn)
+	ok := c.readResult(ctx, conn)
 	if !ok {
-		return fmt.Errorf("server returned failure")
+		return 0, fmt.Errorf("server returned failure")
 	}
 
-	return nil
+	return written, nil
 }
 
 func (c *TcpClient) connect() (conn *net.TCPConn, err error) {
@@ -89,43 +89,48 @@ func (c *TcpClient) connect() (conn *net.TCPConn, err error) {
 	return conn, nil
 }
 
-func writeFileName(name string, writer io.Writer) (err error) {
+func (c *TcpClient) writeFileName(ctx context.Context, name string, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
 	fileNameSizeByte := byte(len(name))
 	fileNameBytes := []byte(name)
-	_, err = writer.Write([]byte{fileNameSizeByte})
+	w1, err := cw.Write([]byte{fileNameSizeByte})
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = writer.Write(fileNameBytes)
+	w2, err := cw.Write(fileNameBytes)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return w1 + w2, nil
 }
 
-func writeFileSize(size uint64, writer io.Writer) (err error) {
+func (c *TcpClient) writeFileSize(ctx context.Context, size uint64, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
 	fileSizeBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(fileSizeBytes, size)
-	_, err = writer.Write(fileSizeBytes)
+	written, err = cw.Write(fileSizeBytes)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return
 }
 
-func writePlot(ctx context.Context, reader io.Reader, writer io.Writer) (written int64, err error) {
+func (c *TcpClient) writePlot(ctx context.Context, reader io.Reader, writer io.Writer) (written int64, err error) {
 	cr := util.NewContextReader(ctx, reader)
 	cw := util.NewContextWriter(ctx, writer)
 
 	return io.Copy(cw, cr)
 }
 
-func readResult(reader io.Reader) (ok bool) {
+func (c *TcpClient) readResult(ctx context.Context, reader io.Reader) (ok bool) {
+	cr := util.NewContextReader(ctx, reader)
 	result := make([]byte, 1)
-	reader.Read(result)
+	cr.Read(result)
 
 	return result[0] == 1
 }

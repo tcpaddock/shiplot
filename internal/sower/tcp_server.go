@@ -19,96 +19,101 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package server
+package sower
 
 import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
 	"strings"
 
 	"github.com/tcpaddock/shiplot/internal/config"
-	"github.com/tcpaddock/shiplot/internal/sower"
+	"github.com/tcpaddock/shiplot/internal/util"
 	"golang.org/x/exp/slog"
 )
 
-type Server struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	cfg      config.Config
-	sower    *sower.Sower
-	listener net.Listener
+type TcpServer struct {
+	cfg   config.Config
+	sower *Sower
 }
 
-func NewServer(ctx context.Context, cfg config.Config, sower *sower.Sower) (s *Server) {
-	s = new(Server)
+func NewTcpServer(cfg config.Config, sower *Sower) (s *TcpServer) {
+	s = new(TcpServer)
 
-	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cfg = cfg
 	s.sower = sower
 
 	return s
 }
 
-func (s *Server) Run() (err error) {
+func (s *TcpServer) Run(ctx context.Context) (err error) {
 	endpoint := fmt.Sprintf("%s:%d", s.cfg.Server.Ip, s.cfg.Server.Port)
 	slog.Default().Info(fmt.Sprintf("Starting TCP server on %s", endpoint))
-	s.listener, err = net.Listen("tcp", endpoint)
+	listener, err := net.Listen("tcp", endpoint)
 	if err != nil {
 		return err
 	}
 
-	go s.runLoop()
+	defer listener.Close()
+
+	s.sower.wg.Add(1)
+	go s.runLoop(ctx, listener)
 
 	for {
 		select {
 		case <-make(chan struct{}):
-		case <-s.ctx.Done():
-			s.listener.Close()
+		case <-ctx.Done():
+			listener.Close()
 			return nil
 		}
 	}
 }
 
-func (s *Server) runLoop() {
-	defer s.listener.Close()
+func (s *TcpServer) runLoop(ctx context.Context, listener net.Listener) {
+	defer s.sower.wg.Done()
+
 	for {
-		conn, err := s.listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
-			slog.Default().Error("Request failed", err)
+			slog.Default().Error("Incoming connection failed", err)
 		}
 
-		go s.handleRequest(conn)
+		go s.handleRequest(ctx, conn)
 	}
 }
 
-func (s *Server) handleRequest(conn net.Conn) {
-	fileName, err := readFileName(conn)
+func (s *TcpServer) handleRequest(ctx context.Context, conn net.Conn) {
+	fileName, err := s.readFileName(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file name from request", err)
-		conn.Write([]byte{0})
+		s.writeFail(ctx, conn)
 		return
 	}
 
-	fileSize, err := readFileSize(conn)
+	fileSize, err := s.readFileSize(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file size from request", err)
-		conn.Write([]byte{0})
+		s.writeFail(ctx, conn)
 		return
 	}
 
-	err = s.sower.SavePlot(fileName, fileSize, conn)
+	err = s.sower.enqueuePlotDownload(ctx, fileName, fileSize, conn)
 	if err != nil {
-		slog.Default().Error("Failed to read file from request", err)
-		conn.Write([]byte{0})
+		slog.Default().Error("Failed to add plot download to queue", err, slog.String("name", fileName))
+		s.writeFail(ctx, conn)
 		return
 	}
 
-	conn.Write([]byte{1})
+	_, err = s.writeSuccess(ctx, conn)
+	if err != nil {
+		slog.Default().Error("Failed to send success status", err)
+		return
+	}
 }
 
-func readFileName(conn net.Conn) (name string, err error) {
+func (s *TcpServer) readFileName(ctx context.Context, conn net.Conn) (name string, err error) {
 	fileNameSizeBytes := make([]byte, 1)
 	_, err = conn.Read(fileNameSizeBytes)
 	if err != nil {
@@ -129,9 +134,11 @@ func readFileName(conn net.Conn) (name string, err error) {
 	return fileName, nil
 }
 
-func readFileSize(conn net.Conn) (size uint64, err error) {
+func (s *TcpServer) readFileSize(ctx context.Context, reader io.Reader) (size uint64, err error) {
+	cr := util.NewContextReader(ctx, reader)
+
 	fileSizeBytes := make([]byte, 8)
-	_, err = conn.Read(fileSizeBytes)
+	_, err = cr.Read(fileSizeBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -139,4 +146,16 @@ func readFileSize(conn net.Conn) (size uint64, err error) {
 	fileSize := binary.LittleEndian.Uint64(fileSizeBytes)
 
 	return fileSize, nil
+}
+
+func (s *TcpServer) writeSuccess(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{1})
+}
+
+func (s *TcpServer) writeFail(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{0})
 }
