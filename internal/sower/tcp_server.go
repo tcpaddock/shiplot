@@ -88,21 +88,21 @@ func (s *TcpServer) handleRequest(ctx context.Context, conn net.Conn) {
 	fileName, err := s.readFileName(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file name from request", err)
-		writeFail(ctx, conn)
+		_, _ = writeFail(ctx, conn)
 		return
 	}
 
 	fileSize, err := s.readFileSize(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file size from request", err)
-		writeFail(ctx, conn)
+		_, _ = writeFail(ctx, conn)
 		return
 	}
 
 	err = s.sower.enqueuePlotDownload(ctx, fileName, fileSize, conn, conn)
 	if err != nil {
 		slog.Default().Error("Failed to add plot download to queue", err, slog.String("name", fileName))
-		writeFail(ctx, conn)
+		_, _ = writeFail(ctx, conn)
 		return
 	}
 

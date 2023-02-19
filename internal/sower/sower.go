@@ -203,12 +203,12 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 			return
 		}
 
-		writeSuccess(ctx, writer)
+		_, _ = writeSuccess(ctx, writer)
 
 		// Rename temporary file
 		err = os.Rename(dstFullName+".tmp", dstFullName)
 		if err != nil {
-			writeFail(ctx, writer)
+			_, _ = writeFail(ctx, writer)
 			slog.Default().Error(fmt.Sprintf("failed to rename temp file %s", dstFullName+".tmp"), err)
 			return
 		}
