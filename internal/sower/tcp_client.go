@@ -130,7 +130,13 @@ func (c *TcpClient) writePlot(ctx context.Context, reader io.Reader, writer io.W
 func (c *TcpClient) readResult(ctx context.Context, reader io.Reader) (ok bool) {
 	cr := util.NewContextReader(ctx, reader)
 	result := make([]byte, 1)
-	cr.Read(result)
+
+	for {
+		cr.Read(result)
+		if len(result) > 0 {
+			break
+		}
+	}
 
 	return result[0] == 1
 }

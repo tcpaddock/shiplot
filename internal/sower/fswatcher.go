@@ -23,7 +23,6 @@ package sower
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -77,7 +76,7 @@ func (w *FsWatcher) Run(ctx context.Context) (err error) {
 
 	for _, stagingPath := range stagePaths {
 		// Add staging path to watcher
-		slog.Default().Info(fmt.Sprintf("Starting watcher on %s", stagingPath))
+		slog.Default().Info("Path added to watcher", slog.String("name", stagingPath))
 		err = w.watcher.Add(stagingPath)
 		if err != nil {
 			return err
@@ -135,9 +134,16 @@ func (w *FsWatcher) runLoop(ctx context.Context) {
 			}
 
 			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
-				err := w.sower.enqueuePlotMove(ctx, e.Name)
-				if err != nil {
-					slog.Default().Error("failed to add plot move to queue", err, slog.String("name", e.Name))
+				if w.cfg.Client.Enabled {
+					err := w.sower.enqueuePlotUpload(ctx, e.Name)
+					if err != nil {
+						slog.Default().Error("failed to add plot upload to queue", err, slog.String("name", e.Name))
+					}
+				} else {
+					err := w.sower.enqueuePlotMove(ctx, e.Name)
+					if err != nil {
+						slog.Default().Error("failed to add plot move to queue", err, slog.String("name", e.Name))
+					}
 				}
 			}
 		// Read from context for closing

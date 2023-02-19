@@ -88,25 +88,25 @@ func (s *TcpServer) handleRequest(ctx context.Context, conn net.Conn) {
 	fileName, err := s.readFileName(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file name from request", err)
-		s.writeFail(ctx, conn)
+		writeFail(ctx, conn)
 		return
 	}
 
 	fileSize, err := s.readFileSize(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to read file size from request", err)
-		s.writeFail(ctx, conn)
+		writeFail(ctx, conn)
 		return
 	}
 
-	err = s.sower.enqueuePlotDownload(ctx, fileName, fileSize, conn)
+	err = s.sower.enqueuePlotDownload(ctx, fileName, fileSize, conn, conn)
 	if err != nil {
 		slog.Default().Error("Failed to add plot download to queue", err, slog.String("name", fileName))
-		s.writeFail(ctx, conn)
+		writeFail(ctx, conn)
 		return
 	}
 
-	_, err = s.writeSuccess(ctx, conn)
+	_, err = writeSuccess(ctx, conn)
 	if err != nil {
 		slog.Default().Error("Failed to send success status", err)
 		return
@@ -114,14 +114,16 @@ func (s *TcpServer) handleRequest(ctx context.Context, conn net.Conn) {
 }
 
 func (s *TcpServer) readFileName(ctx context.Context, conn net.Conn) (name string, err error) {
+	cr := util.NewContextReader(ctx, conn)
+
 	fileNameSizeBytes := make([]byte, 1)
-	_, err = conn.Read(fileNameSizeBytes)
+	_, err = io.ReadFull(cr, fileNameSizeBytes)
 	if err != nil {
 		return "", err
 	}
 
 	fileNameBytes := make([]byte, int(fileNameSizeBytes[0]))
-	_, err = conn.Read(fileNameBytes)
+	_, err = io.ReadFull(cr, fileNameBytes)
 	if err != nil {
 		return "", err
 	}
@@ -138,7 +140,7 @@ func (s *TcpServer) readFileSize(ctx context.Context, reader io.Reader) (size ui
 	cr := util.NewContextReader(ctx, reader)
 
 	fileSizeBytes := make([]byte, 8)
-	_, err = cr.Read(fileSizeBytes)
+	_, err = io.ReadFull(cr, fileSizeBytes)
 	if err != nil {
 		return 0, err
 	}
@@ -146,16 +148,4 @@ func (s *TcpServer) readFileSize(ctx context.Context, reader io.Reader) (size ui
 	fileSize := binary.LittleEndian.Uint64(fileSizeBytes)
 
 	return fileSize, nil
-}
-
-func (s *TcpServer) writeSuccess(ctx context.Context, writer io.Writer) (written int, err error) {
-	cw := util.NewContextWriter(ctx, writer)
-
-	return cw.Write([]byte{1})
-}
-
-func (s *TcpServer) writeFail(ctx context.Context, writer io.Writer) (written int, err error) {
-	cw := util.NewContextWriter(ctx, writer)
-
-	return cw.Write([]byte{0})
 }

@@ -80,67 +80,6 @@ func NewSower(cfg config.Config) (s *Sower, err error) {
 	return s, nil
 }
 
-func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint64, reader io.Reader) (err error) {
-	s.wg.Add(1)
-	err = s.pool.Submit(func() {
-		defer s.wg.Done()
-
-		// Find the best destination path
-		dstPath := s.getDestinationPath(size)
-		defer s.paths.Update(dstPath, true)
-
-		var (
-			dstDir      = dstPath.name
-			dstFullName = filepath.Join(dstDir, name)
-		)
-
-		// Create destination file
-		dst, err := os.Create(dstFullName + ".tmp")
-		if err != nil {
-			dst.Close()
-			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
-			return
-		}
-		defer dst.Close()
-
-		start := time.Now()
-
-		// Download plot to temporary file
-		cr := util.NewContextReader(ctx, reader)
-		cw := util.NewContextWriter(ctx, dst)
-		written, err := io.Copy(cw, cr)
-		if err != nil {
-			slog.Default().Error(fmt.Sprintf("failed to download %s", name), err)
-			return
-		}
-
-		if uint64(written) != size {
-			os.Remove(dstFullName + ".tmp")
-			slog.Default().Error(fmt.Sprintf("failed to download %s", name), fmt.Errorf("file size mismatch"))
-			return
-		}
-
-		// Rename temporary file
-		err = os.Rename(dstFullName+".tmp", dstFullName)
-		if err != nil {
-			slog.Default().Error(fmt.Sprintf("failed to rename temp file %s", dstFullName+".tmp"), err)
-			return
-		}
-
-		duration := time.Since(start)
-
-		// Update available paths
-		s.paths.Update(dstPath, true)
-
-		slog.Default().Info(fmt.Sprintf("Downloaded %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 	s.wg.Add(1)
 	err = s.pool.Submit(func() {
@@ -203,10 +142,83 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 
 		duration := time.Since(start)
 
+		// Delete source file
+		err = os.Remove(src.Name())
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to delete file %s", src.Name()), err)
+		}
+
 		// Update available paths
 		s.paths.Update(dstPath, true)
 
 		slog.Default().Info(fmt.Sprintf("Moved %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	})
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint64, reader io.Reader, writer io.Writer) (err error) {
+	s.wg.Add(1)
+	err = s.pool.Submit(func() {
+		defer s.wg.Done()
+
+		// Find the best destination path
+		dstPath := s.getDestinationPath(size)
+		defer s.paths.Update(dstPath, true)
+
+		var (
+			dstDir      = dstPath.name
+			dstFullName = filepath.Join(dstDir, name)
+		)
+
+		// Create destination file
+		dst, err := os.Create(dstFullName + ".tmp")
+		if err != nil {
+			writeFail(ctx, writer)
+			dst.Close()
+			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
+			return
+		}
+		defer dst.Close()
+
+		start := time.Now()
+
+		// Download plot to temporary file
+		cr := util.NewContextReader(ctx, reader)
+		cw := util.NewContextWriter(ctx, dst)
+		written, err := io.Copy(cw, cr)
+		if err != nil {
+			writeFail(ctx, writer)
+			slog.Default().Error(fmt.Sprintf("failed to download %s", name), err)
+			return
+		}
+
+		if uint64(written) != size {
+			writeFail(ctx, writer)
+			os.Remove(dstFullName + ".tmp")
+			slog.Default().Error(fmt.Sprintf("failed to download %s", name), fmt.Errorf("file size mismatch"))
+			return
+		}
+
+		writeSuccess(ctx, writer)
+
+		// Rename temporary file
+		err = os.Rename(dstFullName+".tmp", dstFullName)
+		if err != nil {
+			writeFail(ctx, writer)
+			slog.Default().Error(fmt.Sprintf("failed to rename temp file %s", dstFullName+".tmp"), err)
+			return
+		}
+
+		duration := time.Since(start)
+
+		// Update available paths
+		s.paths.Update(dstPath, true)
+
+		slog.Default().Info(fmt.Sprintf("Downloaded %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
 	})
 	if err != nil {
 		return err
@@ -241,13 +253,19 @@ func (s *Sower) enqueuePlotUpload(ctx context.Context, name string) (err error) 
 
 		// Upload plot file
 		cr := util.NewContextReader(ctx, src)
-		written, err := s.client.WritePlot(ctx, name, uint64(info.Size()), cr)
+		written, err := s.client.WritePlot(ctx, filepath.Base(name), uint64(info.Size()), cr)
 		if err != nil {
 			slog.Default().Error(fmt.Sprintf("failed to upload %s", name), err)
 			return
 		}
 
 		duration := time.Since(start)
+
+		// Delete source file
+		err = os.Remove(name)
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to delete file %s", src.Name()), err)
+		}
 
 		slog.Default().Info(fmt.Sprintf("Successfully uploaded %s", name), slog.Int64("written", written), slog.Duration("time", duration))
 	})
@@ -308,4 +326,16 @@ func (s *Sower) getPoolSize() (size int) {
 	}
 
 	return poolSize
+}
+
+func writeSuccess(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{1})
+}
+
+func writeFail(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{0})
 }
