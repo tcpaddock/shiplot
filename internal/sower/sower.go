@@ -177,7 +177,7 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 		// Create destination file
 		dst, err := os.Create(dstFullName + ".tmp")
 		if err != nil {
-			writeFail(ctx, writer)
+			_, _ = writeFail(ctx, writer)
 			dst.Close()
 			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
 			return
@@ -191,13 +191,13 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 		cw := util.NewContextWriter(ctx, dst)
 		written, err := io.Copy(cw, cr)
 		if err != nil {
-			writeFail(ctx, writer)
+			_, _ = writeFail(ctx, writer)
 			slog.Default().Error(fmt.Sprintf("failed to download %s", name), err)
 			return
 		}
 
 		if uint64(written) != size {
-			writeFail(ctx, writer)
+			_, _ = writeFail(ctx, writer)
 			os.Remove(dstFullName + ".tmp")
 			slog.Default().Error(fmt.Sprintf("failed to download %s", name), fmt.Errorf("file size mismatch"))
 			return
