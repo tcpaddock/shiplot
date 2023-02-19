@@ -1,14 +1,34 @@
-# Maximum number of concurrent file transfers
+# Maximum number of concurrent file transfers.
 maxThreads: 3
 
+# Server section contains settings for a TCP server to support network transfers.
+server:
+  # Whether to run a server. Default is false.
+  enabled: true
+  # The IP the server should bind to. Default is 0.0.0.0.
+  ip: "0.0.0.0"
+  # The port the server should bind to. Default is 9080.
+  port: 9080
+
+# Client section contains settings for a TCP client to support network transfers.
+# The client move all plot files to the server and will discard any destination paths.
+client:
+  # Whether to enable moving plots over the network. Default is false.
+  enabled: true
+  # The IP of the server. Default is 0.0.0.0.
+  serverIp: "0.0.0.0"
+  # The port of the server. Default is 9080.
+  serverport: 9080
+
+
 # The paths that are watched for new *.plot files.
-stagingPath:
+stagingPaths:
   - "/staging1"
-  - "/staging2"
-  - "/staging/*"
+  - "/staging2/*"
+  - "/staging3/*/plots"
 
 # List of paths to move *.plot files to.
 destinationPaths:
   - "/dest1"
-  - "/dest2"
-  - "/dest/*"
+  - "/dest2/*"
+  - "/dest3/*/plots"

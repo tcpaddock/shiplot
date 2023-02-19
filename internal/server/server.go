@@ -30,18 +30,15 @@ import (
 )
 
 type Server struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	cfg    config.Config
-	sower  *sower.Sower
+	cfg   config.Config
+	sower *sower.Sower
 }
 
-func NewServer(ctx context.Context, cfg config.Config) (s *Server, err error) {
+func NewServer(cfg config.Config) (s *Server, err error) {
 	s = new(Server)
 
-	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cfg = cfg
-	s.sower, err = sower.NewSower(s.ctx, cfg)
+	s.sower, err = sower.NewSower(cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -49,18 +46,34 @@ func NewServer(ctx context.Context, cfg config.Config) (s *Server, err error) {
 	return s, nil
 }
 
-func (s *Server) Start() (err error) {
-	slog.Default().Info("Starting server")
+func (s *Server) Start(ctx context.Context) (err error) {
+	if s.cfg.Server.Enabled {
+		slog.Default().Info("Starting server")
+		ts := sower.NewTcpServer(s.cfg, s.sower)
 
-	err = s.sower.Run()
-	if err != nil {
-		return err
+		err = ts.Run(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(s.cfg.StagingPaths) > 0 {
+		slog.Default().Info("Starting file system watcher")
+		fw, err := sower.NewFsWatcher(s.cfg, s.sower)
+		if err != nil {
+			return err
+		}
+
+		err = fw.Run(ctx)
+		if err != nil {
+			return err
+		}
 	}
 
 	for {
 		select {
 		case <-make(chan struct{}):
-		case <-s.ctx.Done():
+		case <-ctx.Done():
 			return nil
 		}
 	}

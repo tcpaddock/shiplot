@@ -19,25 +19,28 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package config
+package util
 
-type Config struct {
-	MaxThreads       uint
-	StagingPaths     []string
-	DestinationPaths []string
-	Server           struct {
-		Enabled bool
-		Ip      string
-		Port    uint16
-	}
-	Client struct {
-		Enabled    bool
-		ServerIp   string
-		ServerPort uint16
+import (
+	"context"
+	"io"
+)
+
+type contextReader struct {
+	ctx    context.Context
+	reader io.Reader
+}
+
+func NewContextReader(ctx context.Context, reader io.Reader) io.Reader {
+	return &contextReader{
+		ctx:    ctx,
+		reader: reader,
 	}
 }
 
-func NewConfig() *Config {
-	c := new(Config)
-	return c
+func (cr contextReader) Read(p []byte) (n int, err error) {
+	if err := cr.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return cr.reader.Read(p)
 }

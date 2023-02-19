@@ -31,27 +31,25 @@ import (
 	"sync"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	"github.com/panjf2000/ants/v2"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"github.com/tcpaddock/shiplot/internal/util"
 	"golang.org/x/exp/slog"
 )
 
 type Sower struct {
-	ctx      context.Context
-	cancel   context.CancelFunc
-	cfg      config.Config
-	paths    *pathList
-	movePool *ants.PoolWithFunc
-	watcher  *fsnotify.Watcher
-	wg       sync.WaitGroup
+	cfg    config.Config
+	paths  *pathList
+	pool   *ants.Pool
+	wg     sync.WaitGroup
+	client *TcpClient
 }
 
-func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
+func NewSower(cfg config.Config) (s *Sower, err error) {
 	s = new(Sower)
 
-	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.cfg = cfg
+	s.client = NewTcpClient(cfg)
 
 	// Fill list of available destination paths
 	var destPaths []string
@@ -71,13 +69,10 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	s.paths = new(pathList)
 	s.paths.Populate(destPaths)
 
-	// Create worker pool for moving plots
+	// Create worker pool for moving plots from stream
 	size := s.getPoolSize()
 	slog.Default().Info(fmt.Sprintf("Creating worker pool with max size %d", size))
-	s.movePool, err = ants.NewPoolWithFunc(size, func(i interface{}) {
-		s.movePlot(i)
-		s.wg.Done()
-	})
+	s.pool, err = ants.NewPool(size)
 	if err != nil {
 		return nil, err
 	}
@@ -85,126 +80,208 @@ func NewSower(ctx context.Context, cfg config.Config) (s *Sower, err error) {
 	return s, nil
 }
 
-func (s *Sower) Run() (err error) {
-	// Create filesystem watcher
-	s.watcher, err = fsnotify.NewWatcher()
+func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
+	s.wg.Add(1)
+	err = s.pool.Submit(func() {
+		defer s.wg.Done()
+
+		// Open source file
+		src, err := os.Open(name)
+		if err != nil {
+			src.Close()
+			slog.Default().Error(fmt.Sprintf("failed to open %s", name), err)
+			return
+		}
+		defer src.Close()
+
+		// Get source file size
+		info, err := src.Stat()
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to get file info %s", name), err)
+			return
+		}
+
+		// Find the best destination path
+		dstPath := s.getDestinationPath(uint64(info.Size()))
+		defer s.paths.Update(dstPath, true)
+
+		var (
+			dstDir      = dstPath.name
+			dstFullName = filepath.Join(dstDir, name)
+		)
+
+		slog.Default().Info(fmt.Sprintf("Moving %s to %s", filepath.Base(src.Name()), dstDir))
+
+		// Create destination file
+		dst, err := os.Create(dstFullName + ".tmp")
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
+		}
+		defer dst.Close()
+
+		start := time.Now()
+
+		// Copy plot
+		cr := util.NewContextReader(ctx, src)
+		cw := util.NewContextWriter(ctx, dst)
+		written, err := io.Copy(cw, cr)
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to copy %s to %s", name, filepath.Base(dst.Name())), err)
+		}
+
+		if uint64(written) != uint64(info.Size()) {
+			os.Remove(dstFullName + ".tmp")
+			slog.Default().Error(fmt.Sprintf("failed to copy %s to %s", name, filepath.Base(dst.Name())), fmt.Errorf("file size mismatch"))
+		}
+
+		// Rename temporary file
+		err = os.Rename(dstFullName+".tmp", dstFullName)
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to rename temp file %s", dstFullName+".tmp"), err)
+		}
+
+		duration := time.Since(start)
+
+		// Delete source file
+		err = os.Remove(src.Name())
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to delete file %s", src.Name()), err)
+		}
+
+		// Update available paths
+		s.paths.Update(dstPath, true)
+
+		slog.Default().Info(fmt.Sprintf("Moved %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	})
 	if err != nil {
 		return err
-	}
-
-	// Start running watcher
-	s.wg.Add(1)
-	go s.runLoop()
-
-	// Add staging path to watcher
-	var stagePaths []string
-
-	for _, stagePath := range s.cfg.StagingPaths {
-		if strings.Contains(stagePath, "*") {
-			globPaths, err := filepath.Glob(stagePath)
-			if err != nil {
-				return err
-			}
-
-			stagePaths = append(stagePaths, globPaths...)
-		} else {
-			stagePaths = append(stagePaths, stagePath)
-		}
-	}
-
-	for _, stagingPath := range stagePaths {
-		// Add staging path to watcher
-		slog.Default().Info(fmt.Sprintf("Starting watcher on %s", stagingPath))
-		err = s.watcher.Add(stagingPath)
-		if err != nil {
-			s.Close()
-			return err
-		}
-
-		// Move existing plots
-		files, err := os.ReadDir(stagingPath)
-		if err != nil {
-			return err
-		}
-
-		for _, file := range files {
-			if strings.HasSuffix(file.Name(), ".plot") {
-				s.wg.Add(1)
-				err = s.movePool.Invoke(filepath.Join(stagingPath, file.Name()))
-				if err != nil {
-					return err
-				}
-			}
-		}
 	}
 
 	return nil
 }
 
-func (s *Sower) Close() {
-	s.cancel()
-	s.wg.Wait()
-}
+func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint64, reader io.Reader, writer io.Writer) (err error) {
+	s.wg.Add(1)
+	err = s.pool.Submit(func() {
+		defer s.wg.Done()
 
-func (s *Sower) runLoop() {
-	defer s.wg.Done()
-	for {
-		select {
-		// Read from Errors
-		case err, ok := <-s.watcher.Errors:
-			if !ok { // Channel was closed (i.e. Watcher.Close() was called)
-				return
-			}
-			slog.Default().Error("File watcher error", err)
-		// Read from Events
-		case e, ok := <-s.watcher.Events:
-			if !ok { // Channel was closed (i.e. Watcher.Close() was called)
-				return
-			}
+		// Find the best destination path
+		dstPath := s.getDestinationPath(size)
+		defer s.paths.Update(dstPath, true)
 
-			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
-				s.wg.Add(1)
-				err := s.movePool.Invoke(e.Name)
-				if err != nil {
-					slog.Default().Error(fmt.Sprintf("Failed to invoke job for %s", e.Name), err)
-				}
-			}
-		// Read from context for closing
-		case <-s.ctx.Done():
-			s.watcher.Close()
-			s.movePool.Release()
+		var (
+			dstDir      = dstPath.name
+			dstFullName = filepath.Join(dstDir, name)
+		)
+
+		// Create destination file
+		dst, err := os.Create(dstFullName + ".tmp")
+		if err != nil {
+			_, _ = writeFail(ctx, writer)
+			dst.Close()
+			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
 			return
 		}
+		defer dst.Close()
+
+		start := time.Now()
+
+		// Download plot to temporary file
+		cr := util.NewContextReader(ctx, reader)
+		cw := util.NewContextWriter(ctx, dst)
+		written, err := io.Copy(cw, cr)
+		if err != nil {
+			_, _ = writeFail(ctx, writer)
+			slog.Default().Error(fmt.Sprintf("failed to download %s", name), err)
+			return
+		}
+
+		if uint64(written) != size {
+			_, _ = writeFail(ctx, writer)
+			os.Remove(dstFullName + ".tmp")
+			slog.Default().Error(fmt.Sprintf("failed to download %s", name), fmt.Errorf("file size mismatch"))
+			return
+		}
+
+		_, _ = writeSuccess(ctx, writer)
+
+		// Rename temporary file
+		err = os.Rename(dstFullName+".tmp", dstFullName)
+		if err != nil {
+			_, _ = writeFail(ctx, writer)
+			slog.Default().Error(fmt.Sprintf("failed to rename temp file %s", dstFullName+".tmp"), err)
+			return
+		}
+
+		duration := time.Since(start)
+
+		// Update available paths
+		s.paths.Update(dstPath, true)
+
+		slog.Default().Info(fmt.Sprintf("Downloaded %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	})
+	if err != nil {
+		return err
 	}
+
+	return nil
 }
 
-func (s *Sower) movePlot(i interface{}) {
-	var (
-		srcFullName = i.(string)
-		srcName     = filepath.Base(srcFullName)
-	)
+func (s *Sower) enqueuePlotUpload(ctx context.Context, name string) (err error) {
+	s.wg.Add(1)
+	err = s.pool.Submit(func() {
+		defer s.wg.Done()
+		slog.Default().Info(fmt.Sprintf("Uploading %s", name))
 
-	// Open source file
-	src, err := os.Open(srcFullName)
+		// Open source file
+		src, err := os.Open(name)
+		if err != nil {
+			src.Close()
+			slog.Default().Error(fmt.Sprintf("failed to open %s", name), err)
+			return
+		}
+		defer src.Close()
+
+		// Get source file size
+		info, err := src.Stat()
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to get file info for %s", name), err)
+			return
+		}
+
+		start := time.Now()
+
+		// Upload plot file
+		cr := util.NewContextReader(ctx, src)
+		written, err := s.client.WritePlot(ctx, filepath.Base(name), uint64(info.Size()), cr)
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to upload %s", name), err)
+			return
+		}
+
+		duration := time.Since(start)
+
+		// Delete source file
+		err = os.Remove(name)
+		if err != nil {
+			slog.Default().Error(fmt.Sprintf("failed to delete file %s", src.Name()), err)
+		}
+
+		slog.Default().Info(fmt.Sprintf("Successfully uploaded %s", name), slog.Int64("written", written), slog.Duration("time", duration))
+	})
 	if err != nil {
-		src.Close()
-		slog.Default().Error(fmt.Sprintf("Failed to open %s", srcFullName), err)
-		return
+		return err
 	}
 
-	// Get source file size
-	srcInfo, err := src.Stat()
-	if err != nil {
-		src.Close()
-		slog.Default().Error(fmt.Sprintf("Failed to get the file size of %s", srcFullName), err)
-		return
-	}
+	return nil
+}
 
+func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
 	// Find the best destination path
 	var dstPath *path
 
 	for {
-		// Gets the lowest sized first path and marks it unavailable
+		// Get the lowest sized first path and mark it unavailable
 		dstPath = s.paths.FirstAvailable()
 
 		// Wait for 10 seconds if no available destination
@@ -214,7 +291,7 @@ func (s *Sower) movePlot(i interface{}) {
 		}
 
 		// Ensure destination path has enough space
-		if uint64(srcInfo.Size()) < dstPath.usage.Free() {
+		if uint64(fileSize) < dstPath.usage.Free() {
 			break
 		} else {
 			// Remove path if space is too low
@@ -222,82 +299,15 @@ func (s *Sower) movePlot(i interface{}) {
 
 			// Adjust move pool
 			size := s.getPoolSize()
-			if s.movePool.Cap() != size {
+			if s.pool.Cap() != size {
 				slog.Default().Info(fmt.Sprintf("Adjusting worker pool max size to %d", size))
-				s.movePool.Tune(size)
+				s.pool.Tune(size)
 			}
 			continue
 		}
 	}
 
-	var (
-		dstDir      = dstPath.name
-		dstFullName = filepath.Join(dstDir, srcName)
-	)
-
-	slog.Default().Info(fmt.Sprintf("Moving %s to %s", srcName, dstDir))
-
-	// Open destination file
-	dst, err := os.Create(dstFullName + ".tmp")
-	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to create temp file %s", dstFullName+".tmp"), err)
-		return
-	}
-
-	start := time.Now()
-
-	// Copy plot to temporary file
-	written, err := io.Copy(dst, src)
-	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to copy %s to %s", srcFullName, dstFullName+".tmp"), err)
-		return
-	}
-
-	// Rename temporary file
-	err = os.Rename(dstFullName+".tmp", dstFullName)
-	if err != nil {
-		src.Close()
-		dst.Close()
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to rename %s to %s", dstFullName+".tmp", dstFullName), err)
-		return
-	}
-
-	duration := time.Since(start)
-
-	// Close source file
-	err = src.Close()
-	if err != nil {
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to close %s", srcFullName), err)
-		return
-	}
-
-	// Close destination file
-	err = dst.Close()
-	if err != nil {
-		s.paths.Update(dstPath, true)
-		slog.Default().Error(fmt.Sprintf("Failed to close %s", dstFullName), err)
-		return
-	}
-
-	// Move succeeded, delete source
-	err = os.Remove(src.Name())
-	if err != nil {
-		slog.Default().Error(fmt.Sprintf("Failed to delete %s", src.Name()), err)
-		return
-	}
-
-	// Update available paths
-	s.paths.Update(dstPath, true)
-
-	slog.Default().Info(fmt.Sprintf("Moved %s to %s", srcName, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
+	return dstPath
 }
 
 func (s *Sower) getPoolSize() (size int) {
@@ -316,4 +326,16 @@ func (s *Sower) getPoolSize() (size int) {
 	}
 
 	return poolSize
+}
+
+func writeSuccess(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{1})
+}
+
+func writeFail(ctx context.Context, writer io.Writer) (written int, err error) {
+	cw := util.NewContextWriter(ctx, writer)
+
+	return cw.Write([]byte{0})
 }
