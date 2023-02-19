@@ -164,6 +164,7 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 	s.wg.Add(1)
 	err = s.pool.Submit(func() {
 		defer s.wg.Done()
+		slog.Default().Info(fmt.Sprintf("Downloading %s", name))
 
 		// Find the best destination path
 		dstPath := s.getDestinationPath(size)
