@@ -313,6 +313,10 @@ func (s *Sower) getDestinationPath(fileSize uint64) (destinationPath *path) {
 func (s *Sower) getPoolSize() (size int) {
 	poolSize := int(s.cfg.MaxThreads)
 
+	if s.cfg.Client.Enabled {
+		return poolSize
+	}
+
 	if poolSize == 0 {
 		poolSize = s.paths.Len()
 	} else {
