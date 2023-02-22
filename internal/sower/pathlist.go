@@ -79,7 +79,7 @@ func (pl *pathList) FirstAvailable() (path *path) {
 	return
 }
 
-func (pl *pathList) Update(path *path, available bool) {
+func (pl *pathList) SetAvailable(path *path, available bool) {
 	pathListMutex.Lock()
 
 	index := slices.Index(*pl, path)

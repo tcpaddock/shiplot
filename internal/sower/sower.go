@@ -103,7 +103,7 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 
 		// Find the best destination path
 		dstPath := s.getDestinationPath(uint64(info.Size()))
-		defer s.paths.Update(dstPath, true)
+		defer s.paths.SetAvailable(dstPath, true)
 
 		var (
 			dstDir      = dstPath.name
@@ -149,7 +149,7 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 		}
 
 		// Update available paths
-		s.paths.Update(dstPath, true)
+		s.paths.SetAvailable(dstPath, true)
 
 		slog.Default().Info(fmt.Sprintf("Moved %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
 	})
@@ -167,7 +167,7 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 
 		// Find the best destination path
 		dstPath := s.getDestinationPath(size)
-		defer s.paths.Update(dstPath, true)
+		defer s.paths.SetAvailable(dstPath, true)
 
 		var (
 			dstDir      = dstPath.name
@@ -218,7 +218,7 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 		duration := time.Since(start)
 
 		// Update available paths
-		s.paths.Update(dstPath, true)
+		s.paths.SetAvailable(dstPath, true)
 
 		slog.Default().Info(fmt.Sprintf("Downloaded %s to %s", name, dstDir), slog.Int64("written", written), slog.Duration("time", duration))
 	})
