@@ -24,6 +24,7 @@ package sower
 import (
 	"testing"
 
+	"github.com/ricochet2200/go-disk-usage/du"
 	"github.com/stretchr/testify/require"
 )
 
@@ -81,6 +82,78 @@ func TestLess(t *testing.T) {
 
 	// Act
 	actual := pl.Less(0, 1)
+
+	// Assert
+	require.Equal(t, expected, actual)
+}
+
+func TestPopulate(t *testing.T) {
+	// Arrange
+	dirs := []string{"/test1", "/test2"}
+	actual := new(pathList)
+	expected := &pathList{
+		&path{"/test1", du.NewDiskUsage("blank"), true},
+		&path{"/test2", du.NewDiskUsage("blank"), true},
+	}
+
+	// Act
+	actual.Populate(dirs)
+
+	// Assert
+	require.Equal(t, expected, actual)
+}
+
+func TestFirstAvailable(t *testing.T) {
+	// Arrange
+	du1 := MockDiskUsage{}
+	du1.On("Free").Return(uint64(1))
+	du2 := MockDiskUsage{}
+	du2.On("Free").Return(uint64(2))
+	du3 := MockDiskUsage{}
+	du3.On("Free").Return(uint64(3))
+	pl := &pathList{
+		&path{name: "/test1", usage: &du1, available: true},
+		&path{name: "/test2", usage: &du2, available: true},
+		&path{name: "/test3", usage: &du3, available: false},
+	}
+	expected := (*pl)[1]
+
+	// Act
+	actual := pl.FirstAvailable()
+
+	// Assert
+	require.Equal(t, expected, actual)
+}
+
+func TestSetAvailable(t *testing.T) {
+	// Arrange
+	pl := &pathList{
+		&path{name: "/test1", usage: du.NewDiskUsage("blank"), available: true},
+	}
+	expected := false
+
+	// Act
+	pl.SetAvailable((*pl)[0], false)
+	actual := (*pl)[0].available
+
+	// Assert
+	require.Equal(t, expected, actual)
+}
+
+func TestRemove(t *testing.T) {
+	// Arrange
+	actual := &pathList{
+		&path{name: "/test1", usage: du.NewDiskUsage("blank"), available: true},
+		&path{name: "/test2", usage: du.NewDiskUsage("blank"), available: true},
+		&path{name: "/test3", usage: du.NewDiskUsage("blank"), available: false},
+	}
+	expected := &pathList{
+		&path{name: "/test1", usage: du.NewDiskUsage("blank"), available: true},
+		&path{name: "/test3", usage: du.NewDiskUsage("blank"), available: false},
+	}
+
+	// Act
+	actual.Remove((*actual)[1])
 
 	// Assert
 	require.Equal(t, expected, actual)
