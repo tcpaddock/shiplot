@@ -1,6 +1,6 @@
 # shiplot
 
-[![codecov](https://codecov.io/gh/tcpaddock/shiplot/branch/alpha/graph/badge.svg?token=N52TPZ8AWX)](https://codecov.io/gh/tcpaddock/shiplot/tree/alpha)
+[![codecov](https://codecov.io/gh/tcpaddock/shiplot/branch/alpha/graph/badge.svg?token=N52TPZ8AWX)](https://app.codecov.io/gh/tcpaddock/shiplot/tree/alpha)
 
 Chia plot file shipper.
 
