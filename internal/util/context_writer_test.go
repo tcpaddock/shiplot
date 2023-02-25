@@ -58,7 +58,7 @@ func TestWrite(t *testing.T) {
 
 	// Act
 	sr := strings.NewReader("test")
-	sr.WriteTo(cw)
+	_, _ = sr.WriteTo(cw)
 	actual := b.String()
 
 	// Assert
