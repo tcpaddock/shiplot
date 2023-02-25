@@ -113,8 +113,8 @@ func (s *TcpServer) handleRequest(ctx context.Context, conn net.Conn) {
 	}
 }
 
-func (s *TcpServer) readFileName(ctx context.Context, conn net.Conn) (name string, err error) {
-	cr := util.NewContextReader(ctx, conn)
+func (s *TcpServer) readFileName(ctx context.Context, reader io.Reader) (name string, err error) {
+	cr := util.NewContextReader(ctx, reader)
 
 	fileNameSizeBytes := make([]byte, 1)
 	_, err = io.ReadFull(cr, fileNameSizeBytes)
