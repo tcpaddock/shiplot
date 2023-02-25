@@ -64,3 +64,21 @@ func TestWrite(t *testing.T) {
 	// Assert
 	require.Equal(t, expected, actual)
 }
+
+func TestWriteContext(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithCancel(context.Background())
+	b := bytes.Buffer{}
+	cw := &contextWriter{
+		ctx:    ctx,
+		writer: &b,
+	}
+
+	// Act
+	cancel()
+	sr := strings.NewReader("test")
+	_, err := sr.WriteTo(cw)
+
+	// Assert
+	require.Error(t, err)
+}

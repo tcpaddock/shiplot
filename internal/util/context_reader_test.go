@@ -63,3 +63,20 @@ func TestRead(t *testing.T) {
 	// Assert
 	require.Equal(t, expected, actual)
 }
+
+func TestReadContext(t *testing.T) {
+	// Arrange
+	ctx, cancel := context.WithCancel(context.Background())
+	r := strings.NewReader("test")
+	cr := &contextReader{
+		ctx:    ctx,
+		reader: r,
+	}
+
+	// Act
+	cancel()
+	_, err := io.ReadAll(cr)
+
+	// Assert
+	require.Error(t, err)
+}
