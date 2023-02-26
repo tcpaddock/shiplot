@@ -20,6 +20,22 @@
             "program": "main.go",
             "args": ["version"],
             "buildFlags": "-ldflags='-X \"github.com/tcpaddock/shiplot/cmd.version=debug\" -X \"github.com/tcpaddock/shiplot/cmd.buildTarget=debug\" -X \"github.com/tcpaddock/shiplot/cmd.buildDate=debug\"'"
+        },
+        {
+            "name": "Launch Service Install",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": ["service", "install"]
+        },
+        {
+            "name": "Launch Service Uninstall",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": ["service", "uninstall"]
         }
     ]
 }

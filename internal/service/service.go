@@ -21,18 +21,20 @@ THE SOFTWARE.
 */
 package service
 
-import (
-	"github.com/spf13/cobra"
-	"github.com/tcpaddock/shiplot/cmd"
-)
+const serviceName = "shiplot"
 
-// serviceCmd represents the service command
-var serviceCmd = &cobra.Command{
-	Use:   "service",
-	Short: "Manage shiplot service",
-	Long:  `Manage shiplot service`,
+func Install() (err error) {
+	return install()
 }
 
-func init() {
-	cmd.RootCmd.AddCommand(serviceCmd)
+func Uninstall() (err error) {
+	return uninstall()
+}
+
+func Enable() (err error) {
+	return enable()
+}
+
+func Disable() (err error) {
+	return disable()
 }

@@ -23,16 +23,20 @@ package service
 
 import (
 	"github.com/spf13/cobra"
-	"github.com/tcpaddock/shiplot/cmd"
+	"github.com/tcpaddock/shiplot/internal/service"
 )
 
-// serviceCmd represents the service command
-var serviceCmd = &cobra.Command{
-	Use:   "service",
-	Short: "Manage shiplot service",
-	Long:  `Manage shiplot service`,
+// installCmd represents the install command
+var enableCmd = &cobra.Command{
+	Use:   "enable",
+	Short: "Enable shiplot service",
+	Long:  `Enable shiplot service`,
+	Run: func(cmd *cobra.Command, args []string) {
+		err := service.Enable()
+		cobra.CheckErr(err)
+	},
 }
 
 func init() {
-	cmd.RootCmd.AddCommand(serviceCmd)
+	serviceCmd.AddCommand(enableCmd)
 }
