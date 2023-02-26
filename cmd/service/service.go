@@ -19,48 +19,30 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 */
-package cmd
+package service
 
 import (
-	"fmt"
-	"runtime"
-
 	"github.com/spf13/cobra"
+	"github.com/tcpaddock/shiplot/cmd"
 )
 
-var (
-	version     = "dev"
-	buildTarget = "unknown"
-	buildDate   = "unknown"
-)
-
-// versionCmd represents the version command
-var versionCmd = &cobra.Command{
-	Use:   "version",
-	Short: "Show version number",
-	Long: `
-Show the shiplot version number, build target platform,
-build date and time, and runtime OS type and architecture.
-
-For example:
-
-$ shiplot version
-shiplot v1.0.0
-- build target: linux_amd64
-- build date: 2006-01-02T15:04:05Z
-- os type: linux
-- os arch: amd64
-	
-`,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("shiplot %s\n", version)
-		fmt.Printf("- build target: %s\n", buildTarget)
-		fmt.Printf("- build date: %s\n", buildDate)
-		fmt.Printf("- os type: %s\n", runtime.GOOS)
-		fmt.Printf("- os type: %s\n", runtime.GOARCH)
-	},
+// serviceCmd represents the service command
+var serviceCmd = &cobra.Command{
+	Use:   "service",
+	Short: "Manage shiplot service",
+	Long:  `Manage shiplot service`,
 }
 
 func init() {
-	RootCmd.AddCommand(versionCmd)
+	cmd.RootCmd.AddCommand(serviceCmd)
+
+	// Here you will define your flags and configuration settings.
+
+	// Cobra supports Persistent Flags which will work for this command
+	// and all subcommands, e.g.:
+	// serviceCmd.PersistentFlags().String("foo", "", "A help for foo")
+
+	// Cobra supports local flags which will only run when this command
+	// is called directly, e.g.:
+	// serviceCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }

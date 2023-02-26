@@ -53,7 +53,7 @@ preferred.
 }
 
 func init() {
-	rootCmd.AddCommand(runCmd)
+	RootCmd.AddCommand(runCmd)
 
 	runCmd.PersistentFlags().UintVar(&cfg.MaxThreads, "maxThreads", 4, "Number of concurrent file transfers (default is 4)")
 	runCmd.PersistentFlags().BoolVar(&cfg.Server.Enabled, "server.enabled", false, "Enable TCP server (default is false)")

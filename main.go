@@ -21,7 +21,10 @@ THE SOFTWARE.
 */
 package main
 
-import "github.com/tcpaddock/shiplot/cmd"
+import (
+	"github.com/tcpaddock/shiplot/cmd"
+	_ "github.com/tcpaddock/shiplot/cmd/service"
+)
 
 func main() {
 	cmd.Execute()
