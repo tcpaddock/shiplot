@@ -107,7 +107,7 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 
 		var (
 			dstDir      = dstPath.name
-			dstFullName = filepath.Join(dstDir, name)
+			dstFullName = filepath.Join(dstDir, filepath.Base(src.Name()))
 		)
 
 		slog.Default().Info(fmt.Sprintf("Moving %s to %s", filepath.Base(src.Name()), dstDir))
