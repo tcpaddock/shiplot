@@ -4,9 +4,14 @@
 
 Chia plot file shipper.
 
-## Current State
+## Features
 
-This tool is currently in early development. Test heavily before using.
+- Move plots locally or ship plots over the network.
+- Dynamically adjusts number of plot transfers based on available destination paths.
+- Keeps track of destination paths and queues as needed.
+- Supports multiple source and destination paths.
+- Supports path globbing to keep configs small.
+- Cross platform with testing on Windows, Linux, and Mac.
 
 ## Install
 
