@@ -62,6 +62,6 @@ func init() {
 	runCmd.PersistentFlags().BoolVar(&cfg.Client.Enabled, "client.enabled", false, "Enable TCP client (default is false)")
 	runCmd.PersistentFlags().StringVar(&cfg.Client.ServerIp, "client.serverIp", "0.0.0.0", "IP of TCP server (default is 0.0.0.0)")
 	runCmd.PersistentFlags().Uint16Var(&cfg.Client.ServerPort, "client.serverPort", 9080, "Server listen port (default is 9080)")
-	runCmd.PersistentFlags().StringArrayVar(&cfg.StagingPaths, "stagingPaths", nil, "Directory on fast storage used to stage plots")
-	runCmd.PersistentFlags().StringArrayVar(&cfg.DestinationPaths, "destinationPaths", nil, "Directories for final plot storage")
+	runCmd.PersistentFlags().StringSliceVar(&cfg.StagingPaths, "stagingPaths", nil, "Directory on fast storage used to stage plots")
+	runCmd.PersistentFlags().StringSliceVar(&cfg.DestinationPaths, "destinationPaths", nil, "Directories for final plot storage")
 }
