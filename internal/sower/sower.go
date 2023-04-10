@@ -92,7 +92,6 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 			slog.Default().Error(fmt.Sprintf("failed to open %s", name), err)
 			return
 		}
-		defer src.Close()
 
 		// Get source file size
 		info, err := src.Stat()
@@ -117,7 +116,6 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 		if err != nil {
 			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
 		}
-		defer dst.Close()
 
 		start := time.Now()
 
@@ -133,6 +131,10 @@ func (s *Sower) enqueuePlotMove(ctx context.Context, name string) (err error) {
 			os.Remove(dstFullName + ".tmp")
 			slog.Default().Error(fmt.Sprintf("failed to copy %s to %s", name, filepath.Base(dst.Name())), fmt.Errorf("file size mismatch"))
 		}
+
+		// Windows requires closing files before rename
+		src.Close()
+		dst.Close()
 
 		// Rename temporary file
 		err = os.Rename(dstFullName+".tmp", dstFullName)
@@ -184,7 +186,6 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 			slog.Default().Error(fmt.Sprintf("failed to create temp destination file %s", dstFullName+".tmp"), err)
 			return
 		}
-		defer dst.Close()
 
 		start := time.Now()
 
@@ -206,6 +207,9 @@ func (s *Sower) enqueuePlotDownload(ctx context.Context, name string, size uint6
 		}
 
 		_, _ = writeSuccess(ctx, writer)
+
+		// Windows requires closing files before rename
+		dst.Close()
 
 		// Rename temporary file
 		err = os.Rename(dstFullName+".tmp", dstFullName)
@@ -242,7 +246,6 @@ func (s *Sower) enqueuePlotUpload(ctx context.Context, name string) (err error) 
 			slog.Default().Error(fmt.Sprintf("failed to open %s", name), err)
 			return
 		}
-		defer src.Close()
 
 		// Get source file size
 		info, err := src.Stat()
@@ -262,6 +265,9 @@ func (s *Sower) enqueuePlotUpload(ctx context.Context, name string) (err error) 
 		}
 
 		duration := time.Since(start)
+
+		// Windows requires closing files before deleting
+		src.Close()
 
 		// Delete source file
 		err = os.Remove(name)
