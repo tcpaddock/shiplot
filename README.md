@@ -45,10 +45,10 @@ shiplot.exe version
 Start moving plots:
 ```bash
 # Linux/macOS
-shiplot run --maxthreads=12 --stagingPaths="/staging/*" --destinationPaths="/mnt/dest,/mnt/jbod*"
+shiplot run --maxThreads=12 --stagingPaths="/staging/*" --destinationPaths="/mnt/dest,/mnt/jbod*"
 
 # Windows
-shiplot.exe run --maxthreads=12 --stagingPaths="C:/staging/*" --destinationPaths="D:/,E:/"
+shiplot.exe run --maxThreads=12 --stagingPaths="C:/staging/*" --destinationPaths="D:/,E:/"
 ```
 
 ### Network
@@ -58,19 +58,19 @@ In network mode, the destinationPaths parameter is ignored.
 Start server on destination:
 ```bash
 # Linux/macOS
-shiplot run --maxthreads=12 --destinationPaths="/mnt/dest,/mnt/jbod*" --server.enabled=true
+shiplot run --maxThreads=12 --destinationPaths="/mnt/dest,/mnt/jbod*" --server.enabled=true
 
 # Windows
-shiplot.exe run --maxthreads=12 --destinationPaths="D:/,E:/" --server.enabled=true
+shiplot.exe run --maxThreads=12 --destinationPaths="D:/,E:/" --server.enabled=true
 ```
 
 Start client on plotter:
 ```bash
 # Linux/macOS
-shiplot run --maxthreads=12 --stagingPaths="/staging/*" --client.enabled=true --client.serverIp="192.168.0.2"
+shiplot run --maxThreads=12 --stagingPaths="/staging/*" --client.enabled=true --client.serverIp="192.168.0.2"
 
 # Windows
-shiplot.exe run --maxthreads=12 --stagingPaths="/staging/*" --client.enabled=true --client.serverIp="192.168.0.2"
+shiplot.exe run --maxThreads=12 --stagingPaths="/staging/*" --client.enabled=true --client.serverIp="192.168.0.2"
 ```
 
 ## License
