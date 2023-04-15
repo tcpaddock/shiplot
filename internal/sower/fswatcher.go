@@ -29,6 +29,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/tcpaddock/shiplot/internal/config"
+	"golang.org/x/exp/slices"
 	"golang.org/x/exp/slog"
 )
 
@@ -63,12 +64,24 @@ func (w *FsWatcher) Run(ctx context.Context) (err error) {
 
 	for _, stagePath := range w.cfg.StagingPaths {
 		if strings.Contains(stagePath, "*") {
-			globPaths, err := filepath.Glob(stagePath)
+			matches, err := filepath.Glob(stagePath)
 			if err != nil {
 				return err
 			}
 
-			stagePaths = append(stagePaths, globPaths...)
+			for _, match := range matches {
+				info, _ := os.Stat(match)
+				if info.IsDir() {
+					if !slices.Contains(stagePaths, match) {
+						stagePaths = append(stagePaths, match)
+					}
+				} else {
+					var dir = filepath.Dir(match)
+					if !slices.Contains(stagePaths, dir) {
+						stagePaths = append(stagePaths, dir)
+					}
+				}
+			}
 		} else {
 			stagePaths = append(stagePaths, stagePath)
 		}
