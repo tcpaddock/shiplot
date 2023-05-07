@@ -71,6 +71,9 @@ func (w *FsWatcher) Run(ctx context.Context) (err error) {
 
 			for _, match := range matches {
 				info, _ := os.Stat(match)
+				if strings.Contains(match, "lost+found") {
+					continue
+				}
 				if info.IsDir() {
 					if !slices.Contains(stagePaths, match) {
 						stagePaths = append(stagePaths, match)
@@ -89,7 +92,7 @@ func (w *FsWatcher) Run(ctx context.Context) (err error) {
 
 	for _, stagingPath := range stagePaths {
 		// Add staging path to watcher
-		slog.Default().Info("Path added to watcher", slog.String("name", stagingPath))
+		slog.Default().Info("Adding path to watcher", slog.String("name", stagingPath))
 		err = w.watcher.Add(stagingPath)
 		if err != nil {
 			return err
