@@ -21,13 +21,13 @@ client:
   serverport: 9080
 
 
-# The paths that are watched for new *.plot files.
+# The paths that are watched for new *.plot of *.fpt files.
 stagingPaths:
   - "/staging1"
   - "/staging2/*"
   - "/staging3/*/plots"
 
-# List of paths to move *.plot files to.
+# List of paths to move *.plot or *.fpt files to.
 destinationPaths:
   - "/dest1"
   - "/dest2/*"

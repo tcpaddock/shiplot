@@ -105,7 +105,7 @@ func (w *FsWatcher) Run(ctx context.Context) (err error) {
 		}
 
 		for _, file := range files {
-			if strings.HasSuffix(file.Name(), ".plot") {
+			if strings.HasSuffix(file.Name(), ".plot") || strings.HasSuffix(file.Name(), ".fpt") {
 				fullName := filepath.Join(stagingPath, file.Name())
 
 				if w.cfg.Client.Enabled {
@@ -149,7 +149,7 @@ func (w *FsWatcher) runLoop(ctx context.Context) {
 				return
 			}
 
-			if e.Op.Has(fsnotify.Create) && strings.HasSuffix(e.Name, ".plot") {
+			if e.Op.Has(fsnotify.Create) && (strings.HasSuffix(e.Name, ".plot") || strings.HasSuffix(e.Name, ".fpt")) {
 				if w.cfg.Client.Enabled {
 					err := w.sower.enqueuePlotUpload(ctx, e.Name)
 					if err != nil {
