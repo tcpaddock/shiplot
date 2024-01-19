@@ -129,7 +129,7 @@ func (s *TcpServer) readFileName(ctx context.Context, reader io.Reader) (name st
 	}
 
 	fileName := string(fileNameBytes)
-	if !strings.HasSuffix(fileName, ".plot") {
+	if !(strings.HasSuffix(fileName, ".plot") || strings.HasSuffix(fileName, ".fpt")) {
 		return "", fmt.Errorf("request provided incorrect file name %s", fileName)
 	}
 
